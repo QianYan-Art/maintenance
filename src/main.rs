@@ -136,6 +136,8 @@ fn main() -> ExitCode {
                     topic: args.docs.topic,
                 },
                 source,
+                pack: args.pack,
+                max_lines: args.max_lines,
             }) {
                 Ok(outcome) => {
                     output.status(
@@ -153,6 +155,9 @@ fn main() -> ExitCode {
                         StatusKind::Ok,
                         &format!("manifest: {}", outcome.manifest_path.display()),
                     );
+                    if let Some(pack_path) = outcome.pack_path {
+                        output.status(StatusKind::Ok, &format!("pack: {}", pack_path.display()));
+                    }
                     ExitCode::SUCCESS
                 }
                 Err(CloseoutError::NeedsInput) => {

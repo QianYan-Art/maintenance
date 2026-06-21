@@ -4,24 +4,31 @@ use std::path::PathBuf;
 use crate::core::closeout::{CloseoutArgs, CloseoutError, DocImpactSignal};
 use crate::core::{run_dir, DocumentLane, Manifest, RouteArgs};
 
+mod pack;
+
 #[derive(Debug)]
 pub(crate) struct PacketOutcome {
     pub(crate) packet_path: PathBuf,
     pub(crate) subagent_prompt_path: PathBuf,
     pub(crate) manifest_path: PathBuf,
+    pub(crate) pack_path: Option<PathBuf>,
 }
 
 pub(crate) fn write_route_packet(args: RouteArgs) -> Result<PacketOutcome, String> {
     let manifest = args.build_manifest()?;
-    write_packet_files(manifest)
+    write_packet_files(manifest, None)
 }
 
 pub(crate) fn write_closeout_packet(args: CloseoutArgs) -> Result<PacketOutcome, CloseoutError> {
+    let pack_options = args.pack.then_some(args.max_lines);
     let manifest = args.build_manifest()?;
-    write_packet_files(manifest).map_err(CloseoutError::Other)
+    write_packet_files(manifest, pack_options).map_err(CloseoutError::Other)
 }
 
-fn write_packet_files(manifest: Manifest) -> Result<PacketOutcome, String> {
+fn write_packet_files(
+    manifest: Manifest,
+    pack_options: Option<usize>,
+) -> Result<PacketOutcome, String> {
     let out_dir = run_dir(PathBuf::from(&manifest.project).as_path());
     fs::create_dir_all(&out_dir).map_err(|error| {
         format!(
@@ -33,6 +40,7 @@ fn write_packet_files(manifest: Manifest) -> Result<PacketOutcome, String> {
     let manifest_path = out_dir.join("manifest.json");
     let packet_path = out_dir.join("packet.md");
     let subagent_prompt_path = out_dir.join("subagent-prompt.md");
+    let pack_path = pack_options.map(|_| out_dir.join("pack.md"));
 
     write_text(&manifest_path, &render_manifest(&manifest)?)?;
     write_text(
@@ -40,11 +48,15 @@ fn write_packet_files(manifest: Manifest) -> Result<PacketOutcome, String> {
         &render_packet(&manifest, &subagent_prompt_path),
     )?;
     write_text(&subagent_prompt_path, &render_subagent_prompt(&manifest))?;
+    if let Some((path, max_lines)) = pack_path.as_ref().zip(pack_options) {
+        write_text(path, &pack::render_pack(&manifest, max_lines))?;
+    }
 
     Ok(PacketOutcome {
         packet_path,
         subagent_prompt_path,
         manifest_path,
+        pack_path,
     })
 }
 

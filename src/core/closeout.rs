@@ -12,6 +12,8 @@ use crate::core::{display_path, normalize_project, DocumentLane, Manifest, Route
 pub(crate) struct CloseoutArgs {
     pub(crate) route: RouteArgs,
     pub(crate) source: Option<ChangeSourceRequest>,
+    pub(crate) pack: bool,
+    pub(crate) max_lines: usize,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

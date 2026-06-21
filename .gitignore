@@ -1,3 +1,4 @@
 target/
 .doc-maintenance/runs/
 .mission/
+codex-skill/doc-maintenance/bin/maintenance.exe

@@ -176,3 +176,47 @@ fn closeout_rejects_missing_or_path_only_change_sources() {
     assert!(!path_only.status.success());
     assert!(String::from_utf8_lossy(&path_only.stderr).contains("unexpected argument"));
 }
+
+#[test]
+fn closeout_pack_is_bounded_and_contextual() {
+    let project = temp_project("closeout-pack");
+    let mut readme = String::from("# Config\n\nUse OLD_ENV for startup.\n");
+    for index in 0..80 {
+        readme.push_str(&format!("FILLER_LINE_{index}\n"));
+    }
+    write(&project.join("README.md"), &readme);
+    write(
+        &project.join("change.json"),
+        r#"{
+  "files": [
+    {
+      "path": "src/app.rs",
+      "removed": ["let old = \"OLD_ENV\";"],
+      "added": ["let new = \"NEW_ENV\";"]
+    }
+  ]
+}
+"#,
+    );
+
+    let output = maintenance()
+        .args(["closeout", "--project"])
+        .arg(&project)
+        .args([
+            "--change-manifest",
+            "change.json",
+            "--pack",
+            "--max-lines",
+            "30",
+            "--plain",
+        ])
+        .output()
+        .expect("run closeout pack");
+
+    assert!(output.status.success());
+    let pack = fs::read_to_string(latest_run(&project).join("pack.md")).expect("pack");
+    assert!(pack.lines().count() <= 30);
+    assert!(pack.contains("OLD_ENV"));
+    assert!(pack.contains("title: # Config"));
+    assert!(!pack.contains("FILLER_LINE_50"));
+}
