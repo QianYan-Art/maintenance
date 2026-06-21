@@ -7,6 +7,8 @@ mod core;
 mod render;
 mod terminal;
 
+use core::closeout::{CloseoutArgs as CoreCloseoutArgs, CloseoutError};
+use core::diff::ChangeSourceRequest;
 use core::RouteArgs;
 use terminal::{OutputMode, StatusKind};
 
@@ -119,34 +121,82 @@ fn main() -> ExitCode {
             }
         },
         Command::Closeout(args) => {
-            if args.git.is_none() && args.since.is_none() && args.change_manifest.is_none() {
-                println!("needs_input: changed_source");
+            let source = change_source(&args);
+            if source.is_none() {
+                output.status(StatusKind::Warn, "needs_input: changed_source");
                 return ExitCode::from(2);
             }
 
-            output.status(
-                StatusKind::Ok,
-                &format!(
-                    "closeout accepted for project {}",
-                    args.docs.project.display()
-                ),
-            );
-            output.status(
-                StatusKind::Warn,
-                "change-source analysis will be filled by the closeout slice",
-            );
-            ExitCode::SUCCESS
+            match render::write_closeout_packet(CoreCloseoutArgs {
+                route: RouteArgs {
+                    project: args.docs.project,
+                    dev_docs: args.docs.dev_docs,
+                    record_docs: args.docs.record_docs,
+                    summary_source: args.docs.summary_source,
+                    topic: args.docs.topic,
+                },
+                source,
+            }) {
+                Ok(outcome) => {
+                    output.status(
+                        StatusKind::Ok,
+                        &format!("packet: {}", outcome.packet_path.display()),
+                    );
+                    output.status(
+                        StatusKind::Ok,
+                        &format!(
+                            "subagent prompt: {}",
+                            outcome.subagent_prompt_path.display()
+                        ),
+                    );
+                    output.status(
+                        StatusKind::Ok,
+                        &format!("manifest: {}", outcome.manifest_path.display()),
+                    );
+                    ExitCode::SUCCESS
+                }
+                Err(CloseoutError::NeedsInput) => {
+                    output.status(StatusKind::Warn, "needs_input: changed_source");
+                    ExitCode::from(2)
+                }
+                Err(CloseoutError::Other(error)) => {
+                    eprintln!("error: {error}");
+                    ExitCode::from(1)
+                }
+            }
         }
-        Command::Verify(args) => {
-            output.status(
-                StatusKind::Warn,
-                &format!("verify accepted for project {}", args.project.display()),
-            );
-            output.status(
-                StatusKind::Warn,
-                "verification rules will be filled by the closeout slice",
-            );
-            ExitCode::SUCCESS
-        }
+        Command::Verify(args) => match core::verify::verify_project(&args.project) {
+            Ok(report) if report.is_ok() => {
+                output.status(StatusKind::Ok, "verify passed");
+                ExitCode::SUCCESS
+            }
+            Ok(report) => {
+                println!("verify_failed");
+                for token in report.stale_remaining {
+                    println!("stale_remaining: {token}");
+                }
+                for token in report.missing_remaining {
+                    println!("missing_remaining: {token}");
+                }
+                ExitCode::from(2)
+            }
+            Err(error) => {
+                eprintln!("error: {error}");
+                ExitCode::from(1)
+            }
+        },
+    }
+}
+
+fn change_source(args: &CloseoutArgs) -> Option<ChangeSourceRequest> {
+    if let Some(manifest) = &args.change_manifest {
+        return Some(ChangeSourceRequest::ChangeManifest(manifest.clone()));
+    }
+    if let Some(revision) = &args.since {
+        return Some(ChangeSourceRequest::Since(revision.clone()));
+    }
+    match args.git.as_deref() {
+        Some("uncommitted") => Some(ChangeSourceRequest::GitUncommitted),
+        Some(_) | None => None,
     }
 }

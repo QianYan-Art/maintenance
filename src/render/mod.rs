@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 
+use crate::core::closeout::{CloseoutArgs, CloseoutError, DocImpactSignal};
 use crate::core::{run_dir, DocumentLane, Manifest, RouteArgs};
 
 #[derive(Debug)]
@@ -12,6 +13,15 @@ pub(crate) struct PacketOutcome {
 
 pub(crate) fn write_route_packet(args: RouteArgs) -> Result<PacketOutcome, String> {
     let manifest = args.build_manifest()?;
+    write_packet_files(manifest)
+}
+
+pub(crate) fn write_closeout_packet(args: CloseoutArgs) -> Result<PacketOutcome, CloseoutError> {
+    let manifest = args.build_manifest()?;
+    write_packet_files(manifest).map_err(CloseoutError::Other)
+}
+
+fn write_packet_files(manifest: Manifest) -> Result<PacketOutcome, String> {
     let out_dir = run_dir(PathBuf::from(&manifest.project).as_path());
     fs::create_dir_all(&out_dir).map_err(|error| {
         format!(
@@ -66,6 +76,52 @@ fn render_packet(manifest: &Manifest, subagent_prompt_path: &std::path::Path) ->
     render_lane(&mut out, manifest, DocumentLane::CurrentDevDocs);
     render_lane(&mut out, manifest, DocumentLane::KBaseRecords);
     render_lane(&mut out, manifest, DocumentLane::ArchivedRecords);
+    if let Some(closeout) = &manifest.closeout {
+        out.push_str("\n## Change Source\n\n");
+        out.push_str(&format!(
+            "- Source: `{}` ({})\n",
+            closeout.source.kind, closeout.source.detail
+        ));
+        out.push_str(&format!(
+            "- Changed files: {}\n",
+            list_or_none(&closeout.changed_files)
+        ));
+        out.push_str(&format!(
+            "- Changed categories: {}\n",
+            list_or_none(&closeout.changed_categories)
+        ));
+        out.push_str(&format!(
+            "- New tokens: {}\n",
+            list_or_none(&closeout.new_tokens)
+        ));
+        out.push_str(&format!(
+            "- Removed tokens (stale signal): {}\n",
+            list_or_none(&closeout.removed_tokens)
+        ));
+        out.push_str(&format!(
+            "- Missing tokens: {}\n",
+            list_or_none(&closeout.missing_tokens)
+        ));
+        out.push_str("\n## Possible Doc Impact\n\n");
+        if closeout.possible_doc_impact.is_empty() {
+            out.push_str("- none\n");
+        } else {
+            for impact in &closeout.possible_doc_impact {
+                let signal = match impact.signal {
+                    DocImpactSignal::Stale => "stale",
+                    DocImpactSignal::Update => "update",
+                };
+                out.push_str(&format!(
+                    "- `{}` `{}` at `{}:{}` ({})\n",
+                    signal,
+                    impact.token,
+                    impact.path,
+                    impact.line,
+                    impact.lane.title()
+                ));
+            }
+        }
+    }
     out.push_str("\n## Next Action\n\n");
     out.push_str("Send `subagent-prompt.md` to a read-only subagent. The main Codex should read only the specific path:line evidence returned by that subagent before editing docs.\n");
     out

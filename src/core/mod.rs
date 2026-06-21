@@ -3,7 +3,12 @@ use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+
+pub(crate) mod closeout;
+pub(crate) mod diff;
+pub(crate) mod tokens;
+pub(crate) mod verify;
 
 #[derive(Debug)]
 pub(crate) struct RouteArgs {
@@ -14,7 +19,7 @@ pub(crate) struct RouteArgs {
     pub(crate) topic: Vec<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct Manifest {
     pub(crate) schema_version: u32,
     pub(crate) command: String,
@@ -22,9 +27,11 @@ pub(crate) struct Manifest {
     pub(crate) inputs: ManifestInputs,
     pub(crate) candidates: Vec<DocumentCandidate>,
     pub(crate) rules: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) closeout: Option<closeout::CloseoutManifest>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct ManifestInputs {
     pub(crate) dev_docs: Vec<String>,
     pub(crate) record_docs: Vec<String>,
@@ -32,7 +39,7 @@ pub(crate) struct ManifestInputs {
     pub(crate) topic: Vec<String>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct DocumentCandidate {
     pub(crate) path: String,
     pub(crate) lane: DocumentLane,
@@ -40,7 +47,7 @@ pub(crate) struct DocumentCandidate {
     pub(crate) archived: bool,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub(crate) enum DocumentLane {
     #[serde(rename = "Current Dev Docs")]
     CurrentDevDocs,
@@ -100,6 +107,7 @@ impl RouteArgs {
                 "record docs are processed only when explicitly passed".to_string(),
                 "any path segment named archived is listed as Archived Records only".to_string(),
             ],
+            closeout: None,
         })
     }
 }
@@ -115,7 +123,7 @@ pub(crate) fn run_dir(project: &Path) -> PathBuf {
         .join(format!("{millis}"))
 }
 
-fn normalize_project(project: &Path) -> Result<PathBuf, String> {
+pub(crate) fn normalize_project(project: &Path) -> Result<PathBuf, String> {
     let path = if project.as_os_str().is_empty() {
         PathBuf::from(".")
     } else {
@@ -155,7 +163,7 @@ fn dev_doc_inputs(project: &Path, explicit: &[PathBuf]) -> Vec<PathBuf> {
         .collect()
 }
 
-fn resolve_inputs(project: &Path, inputs: &[PathBuf]) -> Vec<PathBuf> {
+pub(crate) fn resolve_inputs(project: &Path, inputs: &[PathBuf]) -> Vec<PathBuf> {
     inputs
         .iter()
         .map(|path| {
@@ -300,7 +308,7 @@ pub(crate) fn display_path(path: &Path) -> String {
     path.display().to_string().replace('\\', "/")
 }
 
-fn looks_like_doc(path: &Path) -> bool {
+pub(crate) fn looks_like_doc(path: &Path) -> bool {
     matches!(
         path.extension().and_then(|extension| extension.to_str()),
         Some("md" | "mdx" | "txt" | "rst")
