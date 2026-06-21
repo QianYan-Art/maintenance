@@ -22,3 +22,14 @@ fn readme_contains_install_and_workflow_contract() {
         );
     }
 }
+
+#[test]
+fn adr_does_not_claim_path_only_changed_files_source() {
+    let adr =
+        fs::read_to_string("docs/adr/20260621-doc-maintenance-skill-cli.md").expect("read ADR");
+
+    assert!(adr.contains("git uncommitted"));
+    assert!(adr.contains("--since <git-ref>"));
+    assert!(adr.contains("change-manifest"));
+    assert!(!adr.contains("diff/changed-files/change-manifest"));
+}
