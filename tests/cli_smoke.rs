@@ -41,7 +41,7 @@ fn route_plain_runs_without_banner() {
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("route accepted"));
+    assert!(stdout.contains("packet:"));
     assert!(!stdout.contains('\u{1b}'));
     assert!(!stdout.contains("Yan Maintenance"));
 }

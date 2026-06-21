@@ -1,8 +1,14 @@
-use std::io::{self, IsTerminal};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
+
+mod core;
+mod render;
+mod terminal;
+
+use core::RouteArgs;
+use terminal::{OutputMode, StatusKind};
 
 #[derive(Debug, Parser)]
 #[command(name = "maintenance")]
@@ -46,7 +52,7 @@ struct CommonDocArgs {
     summary_source: Vec<PathBuf>,
 
     #[arg(long)]
-    topic: Option<String>,
+    topic: Vec<String>,
 }
 
 #[derive(Debug, Parser)]
@@ -76,71 +82,42 @@ struct VerifyArgs {
     project: PathBuf,
 }
 
-#[derive(Clone, Copy, Debug)]
-struct OutputMode {
-    banner: bool,
-    color: bool,
-}
-
-impl OutputMode {
-    fn from_cli(cli: &Cli) -> Self {
-        let interactive = io::stdout().is_terminal();
-        let no_color = std::env::var_os("NO_COLOR").is_some();
-        let plain = cli.plain || no_color || !interactive;
-
-        Self {
-            banner: !plain && !cli.no_banner,
-            color: !plain,
-        }
-    }
-
-    fn status(self, kind: StatusKind, text: &str) {
-        let symbol = match kind {
-            StatusKind::Ok => "✓",
-            StatusKind::Warn => "⚠",
-        };
-        let rendered = if self.color {
-            let code = match kind {
-                StatusKind::Ok => "32",
-                StatusKind::Warn => "33",
-            };
-            format!("\x1b[{code}m{symbol}\x1b[0m {text}")
-        } else {
-            format!("{symbol} {text}")
-        };
-        println!("│ {rendered}");
-    }
-
-    fn banner(self) {
-        if self.banner {
-            println!("⚙ Yan Maintenance");
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-enum StatusKind {
-    Ok,
-    Warn,
-}
-
 fn main() -> ExitCode {
     let cli = Cli::parse();
     let output = OutputMode::from_cli(&cli);
     output.banner();
 
     match cli.command {
-        Command::Route(args) => {
-            output.status(
-                StatusKind::Ok,
-                &format!("route accepted for project {}", args.project.display()),
-            );
-            output.status(
-                StatusKind::Warn,
-                "packet generation will be filled by the route slice",
-            );
-            ExitCode::SUCCESS
-        }
+        Command::Route(args) => match render::write_route_packet(RouteArgs {
+            project: args.project,
+            dev_docs: args.dev_docs,
+            record_docs: args.record_docs,
+            summary_source: args.summary_source,
+            topic: args.topic,
+        }) {
+            Ok(outcome) => {
+                output.status(
+                    StatusKind::Ok,
+                    &format!("packet: {}", outcome.packet_path.display()),
+                );
+                output.status(
+                    StatusKind::Ok,
+                    &format!(
+                        "subagent prompt: {}",
+                        outcome.subagent_prompt_path.display()
+                    ),
+                );
+                output.status(
+                    StatusKind::Ok,
+                    &format!("manifest: {}", outcome.manifest_path.display()),
+                );
+                ExitCode::SUCCESS
+            }
+            Err(error) => {
+                eprintln!("error: {error}");
+                ExitCode::from(1)
+            }
+        },
         Command::Closeout(args) => {
             if args.git.is_none() && args.since.is_none() && args.change_manifest.is_none() {
                 println!("needs_input: changed_source");
