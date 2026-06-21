@@ -1,8 +1,17 @@
 use std::fs;
 
 #[test]
-fn readme_contains_install_and_workflow_contract() {
+fn readme_points_to_docs_directory() {
     let readme = fs::read_to_string("README.md").expect("read README");
+
+    assert!(readme.contains("开发文档集中维护在 `docs/`"));
+    assert!(readme.contains("docs/usage.md"));
+    assert!(readme.contains("docs/adr/20260621-doc-maintenance-skill-cli.md"));
+}
+
+#[test]
+fn docs_usage_contains_install_and_workflow_contract() {
+    let usage = fs::read_to_string("docs/usage.md").expect("read docs usage");
 
     for required in [
         "默认发现",
@@ -17,8 +26,8 @@ fn readme_contains_install_and_workflow_contract() {
         "不自动覆盖",
     ] {
         assert!(
-            readme.contains(required),
-            "missing README phrase: {required}"
+            usage.contains(required),
+            "missing docs usage phrase: {required}"
         );
     }
 }
