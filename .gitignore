@@ -1,4 +1,5 @@
 target/
 .doc-maintenance/runs/
 .mission/
+.serena/
 codex-skill/doc-maintenance/bin/maintenance.exe
