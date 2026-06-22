@@ -56,7 +56,7 @@ maintenance closeout --project . --git uncommitted --pack --max-lines 200
 
 ## Install into a skill package
 
-For end users, the simplest path is to download the `doc-maintenance-skill-<platform>` bundle from Releases and unpack the `doc-maintenance/` folder into your agent's skills directory; the binary ships inside `bin/`. Adding it to `PATH` is optional. The steps below build that package from source.
+For end users, the simplest path is to download the `doc-maintenance-skill-<platform>` bundle from Releases and unpack the `doc-maintenance/` folder into your agent's skills directory; the binary ships inside `bin/`. Adding it to `PATH` is optional, and automated installers should ask before modifying it. The steps below build that package from source.
 
 ```sh
 cargo build --release

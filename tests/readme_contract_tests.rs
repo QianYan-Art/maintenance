@@ -94,6 +94,8 @@ fn readme_contains_public_bilingual_contract() {
         "docs/README.zh-CN.md",
         "docs/en/usage.md",
         "MIT",
+        "automated installers should ask before modifying",
+        "call it by its full path",
     ] {
         assert!(
             readme.contains(required),
@@ -106,6 +108,7 @@ fn readme_contains_public_bilingual_contract() {
     assert!(!readme.contains("opencode"));
     assert!(!readme.contains("## Boundaries"));
     assert!(!readme.contains("## Release Boundary"));
+    assert!(!readme.contains("must be on your"));
 }
 
 #[test]
@@ -135,6 +138,7 @@ fn docs_usage_contains_install_and_workflow_contract() {
         "skill/doc-maintenance/bin/",
         "## Verify the build",
         "cargo clippy --all-targets -- -D warnings",
+        "automated installers should ask before modifying",
     ] {
         assert!(
             en.contains(required),
@@ -157,6 +161,7 @@ fn docs_usage_contains_install_and_workflow_contract() {
         "skill/doc-maintenance/bin/",
         "## 验证构建",
         "cargo clippy --all-targets -- -D warnings",
+        "自动安装代理修改 PATH 前应先征得同意",
     ] {
         assert!(
             zh.contains(required),

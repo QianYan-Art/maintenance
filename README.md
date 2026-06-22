@@ -13,7 +13,7 @@ A lightweight CLI and agent skill that keeps project documentation in sync with 
 
 ## Install
 
-**From a release — no Rust required.** Grab the binary for your platform from the [Releases](https://github.com/QianYan-Art/maintenance/releases) page and put it on your `PATH`:
+**From a release — no Rust required.** Grab the binary for your platform from the [Releases](https://github.com/QianYan-Art/maintenance/releases) page and either put it somewhere on your `PATH` or call it by its full path:
 
 - `maintenance-windows-x64.exe`
 - `maintenance-macos-x64`, `maintenance-macos-arm64`
