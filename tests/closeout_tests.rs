@@ -379,6 +379,133 @@ fn verify_checks_stale_tokens_against_impact_paths_only() {
 }
 
 #[test]
+fn verify_checks_missing_tokens_against_recorded_target_path() {
+    let project = temp_project("verify-missing-target-path");
+    write(&project.join("README.md"), "No new token here.\n");
+    write(
+        &project.join("docs").join("other.md"),
+        "No token here either.\n",
+    );
+    write(
+        &project.join("change.json"),
+        r#"{
+  "files": [
+    {
+      "path": "src/app.rs",
+      "removed": [],
+      "added": ["let new = \"NEW_ENV\";"]
+    }
+  ]
+}
+"#,
+    );
+
+    let output = maintenance()
+        .args(["closeout", "--project"])
+        .arg(&project)
+        .args(["--change-manifest", "change.json", "--plain"])
+        .output()
+        .expect("run closeout");
+    assert!(output.status.success());
+    let manifest = manifest_json(&project);
+    let targets = manifest["closeout"]["missing_targets"]
+        .as_array()
+        .expect("missing targets");
+    assert!(targets
+        .iter()
+        .any(|target| target["token"] == "NEW_ENV" && target["path"] == "README.md"));
+
+    write(&project.join("README.md"), "Still no new token here.\n");
+    write(
+        &project.join("docs").join("other.md"),
+        "Document NEW_ENV here.\n",
+    );
+    let wrong_path_verify = maintenance()
+        .args(["verify", "--project"])
+        .arg(&project)
+        .arg("--plain")
+        .output()
+        .expect("run verify wrong path");
+    assert_eq!(wrong_path_verify.status.code(), Some(2));
+    assert!(
+        String::from_utf8_lossy(&wrong_path_verify.stdout).contains("missing_remaining: NEW_ENV")
+    );
+
+    write(&project.join("README.md"), "Document NEW_ENV here.\n");
+    let right_path_verify = maintenance()
+        .args(["verify", "--project"])
+        .arg(&project)
+        .arg("--plain")
+        .output()
+        .expect("run verify right path");
+    assert!(
+        right_path_verify.status.success(),
+        "verify stdout:\n{}\nverify stderr:\n{}",
+        String::from_utf8_lossy(&right_path_verify.stdout),
+        String::from_utf8_lossy(&right_path_verify.stderr)
+    );
+}
+
+#[test]
+fn verify_keeps_missing_fallback_for_old_manifests() {
+    let project = temp_project("verify-old-missing-manifest");
+    write(&project.join("README.md"), "Document NEW_ENV here.\n");
+    let manifest = serde_json::json!({
+        "schema_version": 1,
+        "command": "closeout",
+        "project": project.display().to_string().replace('\\', "/"),
+        "inputs": {
+            "dev_docs": ["README.md"],
+            "record_docs": [],
+            "summary_source": [],
+            "topic": []
+        },
+        "candidates": [
+            {
+                "path": "README.md",
+                "lane": "Current Dev Docs",
+                "reason": "explicit document path",
+                "archived": false
+            }
+        ],
+        "rules": [],
+        "closeout": {
+            "source": {
+                "kind": "change_manifest",
+                "detail": "legacy"
+            },
+            "changed_files": ["src/app.rs"],
+            "changed_categories": ["env"],
+            "new_tokens": ["NEW_ENV"],
+            "removed_tokens": [],
+            "missing_tokens": ["NEW_ENV"],
+            "possible_doc_impact": []
+        }
+    });
+    write(
+        &project
+            .join(".doc-maintenance")
+            .join("runs")
+            .join("1")
+            .join("manifest.json"),
+        &serde_json::to_string_pretty(&manifest).expect("manifest"),
+    );
+
+    let verify = maintenance()
+        .args(["verify", "--project"])
+        .arg(&project)
+        .arg("--plain")
+        .output()
+        .expect("run verify");
+    assert!(
+        verify.status.success(),
+        "verify stdout:\n{}\nverify stderr:\n{}",
+        String::from_utf8_lossy(&verify.stdout),
+        String::from_utf8_lossy(&verify.stderr)
+    );
+}
+
+#[test]
 fn verify_selects_latest_manifest_by_closeout_payload() {
     let project = temp_project("verify-closeout-manifest");
     write(&project.join("README.md"), "Document OLD_ENV here.\n");

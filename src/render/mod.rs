@@ -114,6 +114,10 @@ fn render_packet(manifest: &Manifest, subagent_prompt_path: &std::path::Path) ->
             "- Missing tokens: {}\n",
             list_or_none(&closeout.missing_tokens)
         ));
+        out.push_str(&format!(
+            "- Missing targets: {}\n",
+            missing_targets_or_none(closeout)
+        ));
         out.push_str("\n## Possible Doc Impact\n\n");
         if closeout.possible_doc_impact.is_empty() {
             out.push_str("- none\n");
@@ -191,6 +195,25 @@ fn list_or_none(values: &[String]) -> String {
             .collect::<Vec<_>>()
             .join(", ")
     }
+}
+
+fn missing_targets_or_none(closeout: &crate::core::closeout::CloseoutManifest) -> String {
+    if closeout.missing_targets.is_empty() {
+        return "none".to_string();
+    }
+    closeout
+        .missing_targets
+        .iter()
+        .map(|target| {
+            format!(
+                "`{}` -> `{}` ({})",
+                target.token,
+                target.path,
+                target.lane.title()
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn write_text(path: &std::path::Path, text: &str) -> Result<(), String> {

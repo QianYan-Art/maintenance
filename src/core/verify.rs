@@ -52,12 +52,24 @@ pub(crate) fn verify_project(project: &Path) -> Result<VerifyReport, String> {
     }
     let stale_remaining = stale_remaining.into_iter().collect::<Vec<_>>();
 
-    let mut missing_remaining = Vec::new();
-    for token in &closeout.missing_tokens {
-        if !docs_contain(&docs, token) {
-            missing_remaining.push(token.clone());
+    let mut missing_remaining = BTreeSet::new();
+    let targeted_missing = closeout
+        .missing_targets
+        .iter()
+        .map(|target| target.token.clone())
+        .collect::<BTreeSet<_>>();
+    for target in &closeout.missing_targets {
+        let doc = project.join(PathBuf::from(&target.path));
+        if !path_contains(&doc, &target.token) {
+            missing_remaining.insert(target.token.clone());
         }
     }
+    for token in &closeout.missing_tokens {
+        if !targeted_missing.contains(token) && !docs_contain(&docs, token) {
+            missing_remaining.insert(token.clone());
+        }
+    }
+    let missing_remaining = missing_remaining.into_iter().collect::<Vec<_>>();
 
     Ok(VerifyReport {
         stale_remaining,

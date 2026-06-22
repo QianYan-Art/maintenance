@@ -6,7 +6,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::diff::{load_change_set, ChangeSetError, ChangeSourceRequest};
 use crate::core::tokens::{RegexExtractor, TokenCategory, TokenExtractor};
-use crate::core::{display_path, normalize_project, DocumentLane, Manifest, RouteArgs};
+use crate::core::{
+    display_path, normalize_project, DocumentCandidate, DocumentLane, Manifest, RouteArgs,
+};
 
 #[derive(Debug)]
 pub(crate) struct CloseoutArgs {
@@ -24,7 +26,16 @@ pub(crate) struct CloseoutManifest {
     pub(crate) new_tokens: Vec<String>,
     pub(crate) removed_tokens: Vec<String>,
     pub(crate) missing_tokens: Vec<String>,
+    #[serde(default)]
+    pub(crate) missing_targets: Vec<MissingTarget>,
     pub(crate) possible_doc_impact: Vec<DocImpact>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct MissingTarget {
+    pub(crate) token: String,
+    pub(crate) path: String,
+    pub(crate) lane: DocumentLane,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -101,6 +112,7 @@ impl CloseoutArgs {
             .filter(|token| !impacted_new.contains(*token))
             .cloned()
             .collect::<Vec<_>>();
+        let missing_targets = find_missing_targets(&project, &manifest, &missing_tokens);
 
         let changed_files = change_set.changed_files();
         manifest.command = "closeout".to_string();
@@ -111,6 +123,7 @@ impl CloseoutArgs {
             new_tokens,
             removed_tokens: removed_tokens_list,
             missing_tokens,
+            missing_targets,
             possible_doc_impact,
         });
         manifest.rules.push(
@@ -122,6 +135,45 @@ impl CloseoutArgs {
         );
         Ok(manifest)
     }
+}
+
+fn find_missing_targets(
+    project: &std::path::Path,
+    manifest: &Manifest,
+    missing_tokens: &[String],
+) -> Vec<MissingTarget> {
+    let Some(target) = best_missing_target(project, manifest) else {
+        return Vec::new();
+    };
+    missing_tokens
+        .iter()
+        .map(|token| MissingTarget {
+            token: token.clone(),
+            path: display_path(&PathBuf::from(&target.path)),
+            lane: target.lane.clone(),
+        })
+        .collect()
+}
+
+fn best_missing_target<'a>(
+    project: &std::path::Path,
+    manifest: &'a Manifest,
+) -> Option<&'a DocumentCandidate> {
+    manifest
+        .candidates
+        .iter()
+        .filter(|candidate| is_targetable_doc(project, candidate))
+        .find(|candidate| candidate.lane == DocumentLane::CurrentDevDocs)
+        .or_else(|| {
+            manifest
+                .candidates
+                .iter()
+                .find(|candidate| is_targetable_doc(project, candidate))
+        })
+}
+
+fn is_targetable_doc(project: &std::path::Path, candidate: &DocumentCandidate) -> bool {
+    !candidate.archived && project.join(PathBuf::from(&candidate.path)).is_file()
 }
 
 fn merge_tokens(

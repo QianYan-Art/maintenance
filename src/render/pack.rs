@@ -47,6 +47,10 @@ pub(crate) fn render_pack(manifest: &Manifest, max_lines: usize) -> String {
             &mut lines,
             &format!("- Missing: {}", join_or_none(&closeout.missing_tokens)),
         );
+        push(
+            &mut lines,
+            &format!("- Missing targets: {}", missing_targets_or_none(closeout)),
+        );
         push(&mut lines, "");
         push(&mut lines, "## Hit Lines");
         for impact in &closeout.possible_doc_impact {
@@ -121,4 +125,23 @@ fn join_or_none(values: &[String]) -> String {
             .collect::<Vec<_>>()
             .join(", ")
     }
+}
+
+fn missing_targets_or_none(closeout: &crate::core::closeout::CloseoutManifest) -> String {
+    if closeout.missing_targets.is_empty() {
+        return "none".to_string();
+    }
+    closeout
+        .missing_targets
+        .iter()
+        .map(|target| {
+            format!(
+                "`{}` -> `{}` ({})",
+                target.token,
+                target.path,
+                target.lane.title()
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
 }
