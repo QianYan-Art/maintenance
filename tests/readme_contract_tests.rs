@@ -34,6 +34,7 @@ fn github_workflows_cover_ci_and_release_contract() {
         "maintenance-windows-x64.exe",
         "gh release create",
         "gh release upload",
+        "GH_REPO: ${{ github.repository }}",
     ] {
         assert!(
             release.contains(required),
