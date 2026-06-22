@@ -56,6 +56,8 @@ maintenance closeout --project . --git uncommitted --pack --max-lines 200
 
 ## 安装到 skill 包
 
+终端用户最简单的方式：从 Releases 下载 `doc-maintenance-skill-<平台>` 压缩包，把解压出的 `doc-maintenance/` 目录放进 agent 的 skills 目录（并把其中 `bin/maintenance` 放进 `PATH`）。下面是从源码构建该包的步骤。
+
 ```sh
 cargo build --release
 ./scripts/copy-release.sh   # Windows 用 .\scripts\copy-release.ps1

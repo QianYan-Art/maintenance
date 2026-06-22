@@ -19,18 +19,22 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             asset_name: maintenance-linux-x64
+            skill_bundle_name: doc-maintenance-skill-linux-x64.tar.gz
             extension: ""
           - os: macos-15-intel
             target: x86_64-apple-darwin
             asset_name: maintenance-macos-x64
+            skill_bundle_name: doc-maintenance-skill-macos-x64.tar.gz
             extension: ""
           - os: macos-14
             target: aarch64-apple-darwin
             asset_name: maintenance-macos-arm64
+            skill_bundle_name: doc-maintenance-skill-macos-arm64.tar.gz
             extension: ""
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             asset_name: maintenance-windows-x64.exe
+            skill_bundle_name: doc-maintenance-skill-windows-x64.zip
             extension: ".exe"
 
     steps:
@@ -47,13 +51,23 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          cp "target/${{ matrix.target }}/release/maintenance${{ matrix.extension }}" "dist/${{ matrix.asset_name }}"
+          binary_path="target/${{ matrix.target }}/release/maintenance${{ matrix.extension }}"
+          bundle_root="bundle-root/doc-maintenance"
+          cp "$binary_path" "dist/${{ matrix.asset_name }}"
+          mkdir -p "$bundle_root/bin"
+          cp "skill/doc-maintenance/SKILL.md" "$bundle_root/SKILL.md"
+          cp "$binary_path" "$bundle_root/bin/maintenance${{ matrix.extension }}"
+          if [[ "${{ matrix.skill_bundle_name }}" == *.zip ]]; then
+            (cd bundle-root && pwsh -NoProfile -Command "Compress-Archive -Path 'doc-maintenance' -DestinationPath '../dist/${{ matrix.skill_bundle_name }}' -Force")
+          else
+            tar -czf "dist/${{ matrix.skill_bundle_name }}" -C bundle-root doc-maintenance
+          fi
 
-      - name: Upload release asset
+      - name: Upload release assets
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.asset_name }}
-          path: dist/${{ matrix.asset_name }}
+          name: ${{ matrix.asset_name }}-assets
+          path: dist/*
           if-no-files-found: error
 
   publish:
