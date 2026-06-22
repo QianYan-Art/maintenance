@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::Path;
+use std::process::Command;
 
 use regex::Regex;
 
@@ -46,10 +47,13 @@ fn github_workflows_cover_ci_and_release_contract() {
 #[test]
 fn readme_points_to_docs_directory() {
     let readme = fs::read_to_string("README.md").expect("read README");
+    let zh_readme = fs::read_to_string("docs/README.zh-CN.md").expect("read zh README");
 
-    assert!(readme.contains("开发文档集中维护在 `docs/`"));
-    assert!(readme.contains("docs/usage.md"));
-    assert!(readme.contains("docs/adr/20260621-doc-maintenance-skill-cli.md"));
+    assert!(readme.contains("docs/en/usage.md"));
+    assert!(readme.contains("docs/README.zh-CN.md"));
+    assert!(!readme.contains("docs/usage.md"));
+    assert!(!readme.contains("docs/adr/"));
+    assert!(zh_readme.contains("zh/usage.md"));
 }
 
 #[test]
@@ -57,51 +61,29 @@ fn readme_contains_public_bilingual_contract() {
     let readme = fs::read_to_string("README.md").expect("read README");
 
     for required in [
-        "## What It Does",
+        "## What it does",
         "## Install",
-        "GitHub Releases",
         "maintenance-windows-x64.exe",
         "maintenance-macos-x64",
         "maintenance-macos-arm64",
         "maintenance-linux-x64",
         "cargo install --git https://github.com/QianYan-Art/maintenance",
-        "Claude Code",
-        "~/.claude/skills/doc-maintenance/",
-        "~/.codex/skills/doc-maintenance/",
-        "opencode",
-        "pi",
-        "To be verified from tool docs or contributed by the community",
+        "## Use it as a skill",
+        "maintenance --help",
+        "skill/doc-maintenance/",
         "## Usage",
-        "## Change Sources",
-        "## Boundaries",
-        "## Release Boundary",
-        "# Doc Maintenance（中文）",
-        "## 项目定位",
-        "## 安装",
-        "从 GitHub Releases 下载预编译二进制",
-        "## 用法",
-        "## 三类改动来源",
-        "## 禁止事项",
-        "## 发布边界",
-        "cargo run -- init --project . --plain",
-        "cargo run -- route --project . --plain",
-        "cargo run -- closeout --project . --git uncommitted --plain",
-        "cargo run -- verify --project . --plain",
+        "maintenance init --project .",
+        "maintenance route --project .",
+        "maintenance closeout --project . --git uncommitted",
+        "maintenance verify --project .",
+        "## Change sources",
         "--since <git-ref>",
         "--change-manifest <path>",
-        "No MCP server",
-        "不新增 MCP Server",
-        "Git-tracked source package",
-        "Compiled binaries are attached to GitHub Releases",
-        "skill/doc-maintenance/bin/.gitkeep",
-        "skill/doc-maintenance/bin/maintenance.exe",
-        "Git 跟踪的源码包",
-        "二进制由 `v*` tag workflow 上传到 GitHub Releases",
-        "本机 `copy-release` 输出仅本地保留",
-        ".mission/",
-        ".doc-maintenance/",
-        ".serena/",
-        "target/",
+        "## What it won't do",
+        "no model API calls",
+        "no secret reading",
+        "docs/README.zh-CN.md",
+        "docs/en/usage.md",
         "MIT",
     ] {
         assert!(
@@ -109,6 +91,12 @@ fn readme_contains_public_bilingual_contract() {
             "missing README phrase: {required}"
         );
     }
+
+    assert!(!readme.contains("cargo run --"));
+    assert!(!readme.contains("~/.claude/skills/"));
+    assert!(!readme.contains("opencode"));
+    assert!(!readme.contains("## Boundaries"));
+    assert!(!readme.contains("## Release Boundary"));
 }
 
 #[test]
@@ -121,45 +109,83 @@ fn repository_has_mit_license() {
 
 #[test]
 fn docs_usage_contains_install_and_workflow_contract() {
-    let usage = fs::read_to_string("docs/usage.md").expect("read docs usage");
+    let en = fs::read_to_string("docs/en/usage.md").expect("read English usage");
+    let zh = fs::read_to_string("docs/zh/usage.md").expect("read Chinese usage");
 
     for required in [
-        "init",
-        ".doc-maintenance/config.toml",
-        "默认发现",
-        "记录文档无默认值",
-        "--git uncommitted",
-        "--since <git-ref>",
-        "--change-manifest <path>",
-        "verify",
-        "--pack --max-lines 200",
-        "cargo build --release",
-        ".\\scripts\\copy-release.ps1",
+        "# Doc Maintenance — Usage",
+        "## Workflow",
+        "## Change sources",
+        "maintenance closeout --project . --git uncommitted",
+        "maintenance closeout --project . --since HEAD~1",
+        "maintenance closeout --project . --change-manifest ./change.json",
+        "## Pack fallback",
+        "maintenance closeout --project . --git uncommitted --pack --max-lines 200",
+        "## Install into a skill package",
         "./scripts/copy-release.sh",
-        "不自动覆盖",
         "skill/doc-maintenance/bin/",
-        ".doc-maintenance/",
-        ".mission/",
-        ".serena/",
-        "target/",
-        "开源发布应使用 Git 跟踪的源码包",
+        "## Verify the build",
+        "cargo clippy --all-targets -- -D warnings",
     ] {
         assert!(
-            usage.contains(required),
-            "missing docs usage phrase: {required}"
+            en.contains(required),
+            "missing English usage phrase: {required}"
+        );
+    }
+
+    for required in [
+        "# Doc Maintenance — 使用说明",
+        "## 流程",
+        ".doc-maintenance/config.toml",
+        "## 改动来源",
+        "maintenance closeout --project . --git uncommitted",
+        "maintenance closeout --project . --since HEAD~1",
+        "maintenance closeout --project . --change-manifest ./change.json",
+        "## Pack 兜底",
+        "maintenance closeout --project . --git uncommitted --pack --max-lines 200",
+        "## 安装到 skill 包",
+        "./scripts/copy-release.sh",
+        "skill/doc-maintenance/bin/",
+        "## 验证构建",
+        "cargo clippy --all-targets -- -D warnings",
+    ] {
+        assert!(
+            zh.contains(required),
+            "missing Chinese usage phrase: {required}"
         );
     }
 }
 
 #[test]
-fn adr_does_not_claim_path_only_changed_files_source() {
-    let adr =
-        fs::read_to_string("docs/adr/20260621-doc-maintenance-skill-cli.md").expect("read ADR");
+fn git_tracks_public_docs_only() {
+    let output = Command::new("git")
+        .args(["ls-files"])
+        .output()
+        .expect("run git ls-files");
 
-    assert!(adr.contains("git uncommitted"));
-    assert!(adr.contains("--since <git-ref>"));
-    assert!(adr.contains("change-manifest"));
-    assert!(!adr.contains("diff/changed-files/change-manifest"));
+    assert!(output.status.success());
+    let files = String::from_utf8(output.stdout).expect("git ls-files utf8");
+
+    for forbidden in ["CONTEXT.md", "docs/adr/", "docs/usage.md", ".exe"] {
+        assert!(
+            !files.contains(forbidden),
+            "tracked forbidden path: {forbidden}"
+        );
+    }
+    for required in [
+        "docs/en/usage.md",
+        "docs/zh/usage.md",
+        "docs/README.zh-CN.md",
+    ] {
+        assert!(
+            files.contains(required),
+            "missing tracked public doc: {required}"
+        );
+    }
+
+    let gitignore = fs::read_to_string(".gitignore").expect("read gitignore");
+    assert!(gitignore.contains("CONTEXT.md"));
+    assert!(gitignore.contains("docs/adr/"));
 }
 
 #[test]

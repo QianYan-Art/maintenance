@@ -16,31 +16,27 @@ description: Use after project code changes when the agent must update project d
 
 ## 命令
 
-仓库源码运行：
+源码开发场景（在仓库内运行）：
 
 ```powershell
 cargo run -- <command> --plain
 ```
 
-安装包运行：
+已安装 skill 运行（要求 `maintenance` 二进制已在 `PATH`）：
 
 ```powershell
-bin\maintenance.exe <command> --plain
+maintenance <command> --plain
 ```
 
-macOS/Linux 安装包运行：
+作为已安装 skill 使用时不要依赖相对 `bin/` 路径；skill 目录内的 `bin/` 只用于打包占位与本机复制便利。
 
-```bash
-./bin/maintenance <command> --plain
-```
-
-最小调用：
+已安装 skill 的最小调用：
 
 ```powershell
-cargo run -- init --project . --plain
-cargo run -- route --project . --plain
-cargo run -- closeout --project . --git uncommitted --plain
-cargo run -- verify --project . --plain
+maintenance init --project . --plain
+maintenance route --project . --plain
+maintenance closeout --project . --git uncommitted --plain
+maintenance verify --project . --plain
 ```
 
 `init` 只生成本地 `.doc-maintenance/config.toml`，不会覆盖已存在配置。配置可写默认 `dev_docs`、`record_docs`、`topic`；字段留空时沿用自动发现开发文档、不默认读取记录文档的规则。命令行显式传入的路径和 topic 优先于配置。
@@ -78,7 +74,7 @@ cargo run -- verify --project . --plain
 只有子代理不可用时，才允许运行：
 
 ```powershell
-cargo run -- closeout --project . --git uncommitted --pack --max-lines 200 --plain
+maintenance closeout --project . --git uncommitted --pack --max-lines 200 --plain
 ```
 
 `pack.md` 是限额兜底材料，不是长期事实源；读完仍必须编辑目标文档并运行 `verify`。

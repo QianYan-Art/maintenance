@@ -2,5 +2,7 @@ target/
 .doc-maintenance/
 .mission/
 .serena/
+CONTEXT.md
+docs/adr/
 skill/doc-maintenance/bin/maintenance
 skill/doc-maintenance/bin/maintenance.exe

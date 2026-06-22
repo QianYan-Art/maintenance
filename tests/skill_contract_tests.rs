@@ -9,7 +9,8 @@ fn skill_contract_contains_required_workflow_rules() {
 
     for required in [
         "禁止在运行 CLI 前递归读取",
-        "closeout --project . --git uncommitted",
+        "maintenance <command> --plain",
+        "maintenance closeout --project . --git uncommitted",
         "--git uncommitted",
         "--since <git-ref>",
         "--change-manifest <path>",
@@ -51,6 +52,13 @@ fn skill_package_uses_neutral_layout_and_wording() {
     assert!(skill.contains("description: Use after project code changes when the agent"));
     assert!(skill.contains("主 agent"));
     assert!(skill.contains("记录文档"));
+    assert!(skill.contains("源码开发场景"));
+    assert!(skill.contains("cargo run -- <command> --plain"));
+    assert!(skill.contains("已安装 skill 运行"));
+    assert!(skill.contains("`PATH`"));
+    assert!(skill.contains("不要依赖相对 `bin/` 路径"));
+    assert!(!skill.contains("bin\\maintenance.exe <command>"));
+    assert!(!skill.contains("./bin/maintenance <command>"));
     let codex = ['C', 'o', 'd', 'e', 'x'].iter().collect::<String>();
     let old_record_label = ['K', 'B', 'a', 's', 'e'].iter().collect::<String>();
     let old_memory_tool = ["nowledge", "-mem"].concat();
