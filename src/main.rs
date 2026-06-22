@@ -15,7 +15,7 @@ use terminal::{OutputMode, StatusKind};
 
 #[derive(Debug, Parser)]
 #[command(name = "maintenance")]
-#[command(about = "Generate Codex-readable document maintenance packets")]
+#[command(about = "Generate agent-readable document maintenance packets")]
 #[command(subcommand_required = true)]
 struct Cli {
     #[arg(long, global = true, help = "Disable banner and ANSI color")]

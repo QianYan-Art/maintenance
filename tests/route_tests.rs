@@ -74,7 +74,7 @@ fn route_uses_explicit_record_docs_and_archived_lane() {
     write(&project.join("docs").join("guide.md"), "Guide body");
     write(
         &project.join("records").join("loop-note.md"),
-        "KBase body should not inline",
+        "Record docs body should not inline",
     );
     write(
         &project.join("records").join("other.md"),
@@ -106,12 +106,12 @@ fn route_uses_explicit_record_docs_and_archived_lane() {
     let prompt = fs::read_to_string(run.join("subagent-prompt.md")).expect("prompt");
 
     assert!(packet.contains("Current Dev Docs"));
-    assert!(packet.contains("KBase Records"));
+    assert!(packet.contains("Record Docs"));
     assert!(packet.contains("Archived Records"));
     assert!(packet.contains("records/loop-note.md"));
     assert!(!packet.contains("records/other.md"));
     assert!(packet.contains("records/archived"));
-    assert!(!packet.contains("KBase body should not inline"));
+    assert!(!packet.contains("Record docs body should not inline"));
     assert!(prompt.contains("Do not edit files"));
     assert!(prompt.contains("path:line"));
 }

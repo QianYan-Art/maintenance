@@ -73,7 +73,7 @@ fn default_config_template() -> &'static str {
 # 开发文档。留空时自动发现 README.md 与 docs/。
 dev_docs = []
 
-# KBase 记录文档。留空时不读取。
+# 记录文档。留空时不读取。
 record_docs = []
 
 # 可选 summary 来源，用于 route packet 上下文。

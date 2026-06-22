@@ -1,17 +1,17 @@
 ---
 name: doc-maintenance
-description: Use after project code changes when Codex must update project development docs or explicitly named KBase records without recursively reading every doc first.
+description: Use after project code changes when the agent must update project development docs or explicitly named record docs without recursively reading every doc first.
 ---
 
 # Doc Maintenance
 
-先运行内置 CLI 生成短 packet，再让只读子代理审阅候选文档；主 Codex 只根据子代理给出的 `path:line` 证据编辑文档。
+先运行内置 CLI 生成短 packet，再让只读子代理审阅候选文档；主 agent 只根据子代理给出的 `path:line` 证据编辑文档。
 
 ## 禁止
 
-- 禁止在运行 CLI 前递归读取 `docs/`、KBase 或整棵项目文档。
+- 禁止在运行 CLI 前递归读取 `docs/`、记录文档或整棵项目文档。
 - 禁止新增 MCP Server、模型 API、后台服务或密钥配置。
-- 禁止自动写 nowledge-mem。
+- 禁止自动写外部记忆工具。
 - 禁止读取或修改任意 `archived` 路径；它只能被列为历史参考。
 
 ## 命令
@@ -28,6 +28,12 @@ cargo run -- <command> --plain
 bin\maintenance.exe <command> --plain
 ```
 
+macOS/Linux 安装包运行：
+
+```bash
+./bin/maintenance <command> --plain
+```
+
 最小调用：
 
 ```powershell
@@ -37,7 +43,7 @@ cargo run -- closeout --project . --git uncommitted --plain
 cargo run -- verify --project . --plain
 ```
 
-`init` 只生成本地 `.doc-maintenance/config.toml`，不会覆盖已存在配置。配置可写默认 `dev_docs`、`record_docs`、`topic`；字段留空时沿用自动发现开发文档、不默认读取 KBase 的规则。命令行显式传入的路径和 topic 优先于配置。
+`init` 只生成本地 `.doc-maintenance/config.toml`，不会覆盖已存在配置。配置可写默认 `dev_docs`、`record_docs`、`topic`；字段留空时沿用自动发现开发文档、不默认读取记录文档的规则。命令行显式传入的路径和 topic 优先于配置。
 
 `closeout` 必须且只能使用一种带内容改动来源：
 
@@ -57,7 +63,7 @@ cargo run -- verify --project . --plain
    - `stale`: 已过期内容，必须带 `path:line` 和命中 token。
    - `update`: 需更新内容，必须带 `path:line` 和命中 token。
    - `missing`: 需新增内容，必须给出目标路径和命中 token。
-6. 主 Codex 只读取子代理返回的必要 `path:line` 片段并编辑开发文档或显式点名的 KBase 记录。
+6. 主 agent 只读取子代理返回的必要 `path:line` 片段并编辑开发文档或显式点名的记录文档。
 7. 编辑完成后运行 `verify`；若仍有 stale 或 missing，继续修文档并重跑 `verify`。
 
 ## Packet 规则
@@ -65,7 +71,7 @@ cargo run -- verify --project . --plain
 - `packet.md` 只列候选路径、lane、命中原因、changed files、tokens 和 possible doc impact。
 - `packet.md` 不内联文档正文。
 - `manifest.json` 是生成文件的单一数据源。
-- `--record-docs` 无默认值；只有使用者或当前任务显式点名时才处理 KBase 记录文档。
+- `--record-docs` 无默认值；只有使用者或当前任务显式点名时才处理记录文档。
 
 ## Fallback
 

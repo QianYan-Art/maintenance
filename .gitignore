@@ -2,4 +2,5 @@ target/
 .doc-maintenance/
 .mission/
 .serena/
-codex-skill/doc-maintenance/bin/maintenance.exe
+skill/doc-maintenance/bin/maintenance
+skill/doc-maintenance/bin/maintenance.exe

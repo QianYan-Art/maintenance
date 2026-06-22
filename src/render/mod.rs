@@ -86,7 +86,7 @@ fn render_packet(manifest: &Manifest, subagent_prompt_path: &std::path::Path) ->
     }
     out.push_str("\n## Candidate Documents\n");
     render_lane(&mut out, manifest, DocumentLane::CurrentDevDocs);
-    render_lane(&mut out, manifest, DocumentLane::KBaseRecords);
+    render_lane(&mut out, manifest, DocumentLane::RecordDocs);
     render_lane(&mut out, manifest, DocumentLane::ArchivedRecords);
     if let Some(closeout) = &manifest.closeout {
         out.push_str("\n## Change Source\n\n");
@@ -139,7 +139,7 @@ fn render_packet(manifest: &Manifest, subagent_prompt_path: &std::path::Path) ->
         }
     }
     out.push_str("\n## Next Action\n\n");
-    out.push_str("Send `subagent-prompt.md` to a read-only subagent. The main Codex should read only the specific path:line evidence returned by that subagent before editing docs.\n");
+    out.push_str("Send `subagent-prompt.md` to a read-only subagent. The main agent should read only the specific path:line evidence returned by that subagent before editing docs.\n");
     out
 }
 
@@ -155,7 +155,7 @@ fn render_subagent_prompt(manifest: &Manifest) -> String {
     out.push_str("- `missing`: information that should be added, with the best target path.\n\n");
     out.push_str("## Candidate Paths\n");
     render_lane(&mut out, manifest, DocumentLane::CurrentDevDocs);
-    render_lane(&mut out, manifest, DocumentLane::KBaseRecords);
+    render_lane(&mut out, manifest, DocumentLane::RecordDocs);
     render_lane(&mut out, manifest, DocumentLane::ArchivedRecords);
     out
 }

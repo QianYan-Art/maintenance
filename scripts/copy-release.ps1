@@ -2,7 +2,7 @@ $ErrorActionPreference = "Stop"
 
 $root = Resolve-Path (Join-Path $PSScriptRoot "..")
 $source = Join-Path $root "target\release\maintenance.exe"
-$destDir = Join-Path $root "codex-skill\doc-maintenance\bin"
+$destDir = Join-Path $root "skill\doc-maintenance\bin"
 $dest = Join-Path $destDir "maintenance.exe"
 
 if (-not (Test-Path -LiteralPath $source)) {

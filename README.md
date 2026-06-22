@@ -1,11 +1,11 @@
 # Doc Maintenance
 
-Doc Maintenance is a lightweight Codex skill plus Rust CLI for keeping project documentation aligned with code changes. It generates small, Codex-readable packets, asks a read-only subagent to review only the listed document paths, then lets the main Codex session make precise edits.
+Doc Maintenance is a lightweight coding-agent skill plus Rust CLI for keeping project documentation aligned with code changes. It generates small, agent-readable packets, asks a read-only subagent to review only the listed document paths, then lets the main agent make precise edits.
 
 ## What It Does
 
 - Discovers current development docs from `README.md` and `docs/` by default.
-- Reads KBase or record docs only when `--record-docs` is explicitly provided.
+- Reads record docs only when `--record-docs` is explicitly provided.
 - Builds `route`, `closeout`, and `verify` packets without calling model APIs, reading secrets, or starting an MCP server.
 - Keeps generated runs and local config under `.doc-maintenance/`, which is ignored by Git.
 
@@ -31,7 +31,21 @@ cargo build --release
 .\scripts\copy-release.ps1
 ```
 
-The copy script writes only to `codex-skill/doc-maintenance/bin/maintenance.exe`. Install or sync the skill into your own `<user-skills-dir>` only after reviewing the generated package.
+On macOS and Linux, use the matching shell script:
+
+```bash
+cargo build --release
+./scripts/copy-release.sh
+```
+
+The copy scripts write only to `skill/doc-maintenance/bin/`. Install or sync the skill into your own tool-specific skills directory only after reviewing the generated package.
+
+| Tool | Install location | Status |
+| --- | --- | --- |
+| Claude Code | `~/.claude/skills/doc-maintenance/` | exact |
+| Codex | `~/.codex/skills/doc-maintenance/` | exact |
+| opencode | To be verified from tool docs or contributed by the community | not asserted |
+| pi | To be verified from tool docs or contributed by the community | not asserted |
 
 ## Usage
 
@@ -65,7 +79,7 @@ Pure path-only changed-files input is intentionally unsupported.
 
 ## Release Boundary
 
-Publish the Git-tracked source package, not a raw local workspace archive. Do not include ignored local or generated directories such as `.mission/`, `.doc-maintenance/`, `.serena/`, or `target/`. Compiled binaries are attached to GitHub Releases by the `v*` tag workflow, not committed to the repository.
+Publish the Git-tracked source package, not a raw local workspace archive. Do not include ignored local or generated directories such as `.mission/`, `.doc-maintenance/`, `.serena/`, or `target/`. Git tracks `skill/doc-maintenance/SKILL.md` and `skill/doc-maintenance/bin/.gitkeep`, but not `skill/doc-maintenance/bin/maintenance` or `skill/doc-maintenance/bin/maintenance.exe`. Compiled binaries are attached to GitHub Releases by the `v*` tag workflow; local `copy-release` output stays local.
 
 ## Development
 
@@ -86,12 +100,12 @@ License: MIT.
 
 # Doc Maintenance（中文）
 
-Doc Maintenance 是一个轻量 Codex skill + Rust CLI，用于在项目代码变更后维护开发文档。它先生成短小的 Codex 可读 packet，再让只读子代理审阅列出的文档路径，最后由主 Codex 精准编辑。
+Doc Maintenance 是一个轻量 coding-agent skill + Rust CLI，用于在项目代码变更后维护开发文档。它先生成短小的 agent 可读 packet，再让只读子代理审阅列出的文档路径，最后由主 agent 精准编辑。
 
 ## 项目定位
 
 - 默认从 `README.md` 和 `docs/` 发现当前开发文档。
-- 只有显式传入 `--record-docs` 时才读取 KBase 或记录文档。
+- 只有显式传入 `--record-docs` 时才读取记录文档。
 - `route`、`closeout`、`verify` 全部是确定性本地命令，不调用模型 API、不读取密钥、不启动 MCP Server。
 - 运行输出和本地配置都放在 `.doc-maintenance/`，并被 Git 忽略。
 
@@ -117,7 +131,21 @@ cargo build --release
 .\scripts\copy-release.ps1
 ```
 
-复制脚本只写入 `codex-skill/doc-maintenance/bin/maintenance.exe`。如需安装到全局 skill 目录，请先审阅生成的 skill 包，再同步到自己的 `<user-skills-dir>`。
+macOS 和 Linux 使用对应 shell 脚本：
+
+```bash
+cargo build --release
+./scripts/copy-release.sh
+```
+
+复制脚本只写入 `skill/doc-maintenance/bin/`。如需安装到全局 skill 目录，请先审阅生成的 skill 包，再同步到对应工具目录。
+
+| 工具 | 安装位置 | 状态 |
+| --- | --- | --- |
+| Claude Code | `~/.claude/skills/doc-maintenance/` | 确切路径 |
+| Codex | `~/.codex/skills/doc-maintenance/` | 确切路径 |
+| opencode | 待工具文档核实或社区补充 | 不断言 |
+| pi | 待工具文档核实或社区补充 | 不断言 |
 
 ## 用法
 
@@ -151,7 +179,7 @@ cargo run -- verify --project . --plain
 
 ## 发布边界
 
-开源发布应使用 Git 跟踪的源码包，不要直接打包本地工作区。不要包含被忽略的本地过程、运行或构建目录，例如 `.mission/`、`.doc-maintenance/`、`.serena/`、`target/`。编译后二进制由 `v*` tag workflow 上传到 GitHub Releases，不提交进仓库。
+开源发布应使用 Git 跟踪的源码包，不要直接打包本地工作区。不要包含被忽略的本地过程、运行或构建目录，例如 `.mission/`、`.doc-maintenance/`、`.serena/`、`target/`。Git 只跟踪 `skill/doc-maintenance/SKILL.md` 与 `skill/doc-maintenance/bin/.gitkeep`，不跟踪 `skill/doc-maintenance/bin/maintenance` 或 `skill/doc-maintenance/bin/maintenance.exe`。编译后二进制由 `v*` tag workflow 上传到 GitHub Releases；本机 `copy-release` 输出仅本地保留。
 
 开发文档集中维护在 `docs/`：
 

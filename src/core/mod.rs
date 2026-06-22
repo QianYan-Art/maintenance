@@ -52,8 +52,8 @@ pub(crate) struct DocumentCandidate {
 pub(crate) enum DocumentLane {
     #[serde(rename = "Current Dev Docs")]
     CurrentDevDocs,
-    #[serde(rename = "KBase Records")]
-    KBaseRecords,
+    #[serde(rename = "Record Docs")]
+    RecordDocs,
     #[serde(rename = "Archived Records")]
     ArchivedRecords,
 }
@@ -62,7 +62,7 @@ impl DocumentLane {
     pub(crate) fn title(&self) -> &'static str {
         match self {
             Self::CurrentDevDocs => "Current Dev Docs",
-            Self::KBaseRecords => "KBase Records",
+            Self::RecordDocs => "Record Docs",
             Self::ArchivedRecords => "Archived Records",
         }
     }
@@ -86,7 +86,7 @@ impl RouteArgs {
         collect_candidates(
             &project,
             &record_inputs,
-            DocumentLane::KBaseRecords,
+            DocumentLane::RecordDocs,
             &self.topic,
             &mut candidates,
         )?;
@@ -241,7 +241,7 @@ fn collect_one(
                 continue;
             }
             if child.is_dir() {
-                if lane == DocumentLane::KBaseRecords && include_for_topic(&child, topics) {
+                if lane == DocumentLane::RecordDocs && include_for_topic(&child, topics) {
                     push_candidate(
                         project,
                         &child,
@@ -256,7 +256,7 @@ fn collect_one(
             {
                 let reason = match lane {
                     DocumentLane::CurrentDevDocs => "default or explicit development doc",
-                    DocumentLane::KBaseRecords => {
+                    DocumentLane::RecordDocs => {
                         "explicit record docs path matched by file name or topic"
                     }
                     DocumentLane::ArchivedRecords => "archived path; list only",
