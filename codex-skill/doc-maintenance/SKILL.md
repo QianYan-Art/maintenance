@@ -31,10 +31,13 @@ bin\maintenance.exe <command> --plain
 最小调用：
 
 ```powershell
+cargo run -- init --project . --plain
 cargo run -- route --project . --plain
 cargo run -- closeout --project . --git uncommitted --plain
 cargo run -- verify --project . --plain
 ```
+
+`init` 只生成本地 `.doc-maintenance/config.toml`，不会覆盖已存在配置。配置可写默认 `dev_docs`、`record_docs`、`topic`；字段留空时沿用自动发现开发文档、不默认读取 KBase 的规则。命令行显式传入的路径和 topic 优先于配置。
 
 `closeout` 必须且只能使用一种带内容改动来源：
 
@@ -46,15 +49,16 @@ cargo run -- verify --project . --plain
 
 ## 流程
 
-1. 任务开始或接手时运行 `route`，只读取生成的 `packet.md`。
-2. 完成代码改动后运行 `closeout`。
-3. 把生成的 `subagent-prompt.md` 交给只读子代理。
-4. 子代理只读候选路径，不编辑文件，并按三类返回：
+1. 首次在项目使用时可运行 `init` 写入本地默认配置。
+2. 任务开始或接手时运行 `route`，只读取生成的 `packet.md`。
+3. 完成代码改动后运行 `closeout`。
+4. 把生成的 `subagent-prompt.md` 交给只读子代理。
+5. 子代理只读候选路径，不编辑文件，并按三类返回：
    - `stale`: 已过期内容，必须带 `path:line` 和命中 token。
    - `update`: 需更新内容，必须带 `path:line` 和命中 token。
    - `missing`: 需新增内容，必须给出目标路径和命中 token。
-5. 主 Codex 只读取子代理返回的必要 `path:line` 片段并编辑开发文档或显式点名的 KBase 记录。
-6. 编辑完成后运行 `verify`；若仍有 stale 或 missing，继续修文档并重跑 `verify`。
+6. 主 Codex 只读取子代理返回的必要 `path:line` 片段并编辑开发文档或显式点名的 KBase 记录。
+7. 编辑完成后运行 `verify`；若仍有 stale 或 missing，继续修文档并重跑 `verify`。
 
 ## Packet 规则
 

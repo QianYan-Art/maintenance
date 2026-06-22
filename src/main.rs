@@ -8,6 +8,7 @@ mod render;
 mod terminal;
 
 use core::closeout::{CloseoutArgs as CoreCloseoutArgs, CloseoutError};
+use core::config::{init_project_config, load_project_config};
 use core::diff::ChangeSourceRequest;
 use core::RouteArgs;
 use terminal::{OutputMode, StatusKind};
@@ -29,6 +30,9 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    #[command(about = "Create a local doc-maintenance config file")]
+    Init(InitArgs),
+
     #[command(about = "Create a document reading route packet")]
     Route(CommonDocArgs),
 
@@ -37,6 +41,12 @@ enum Command {
 
     #[command(about = "Verify that document closeout expectations are satisfied")]
     Verify(VerifyArgs),
+}
+
+#[derive(Debug, Parser)]
+struct InitArgs {
+    #[arg(long, default_value = ".")]
+    project: PathBuf,
 }
 
 #[derive(Debug, Parser)]
@@ -90,13 +100,27 @@ fn main() -> ExitCode {
     output.banner();
 
     match cli.command {
-        Command::Route(args) => match render::write_route_packet(RouteArgs {
-            project: args.project,
-            dev_docs: args.dev_docs,
-            record_docs: args.record_docs,
-            summary_source: args.summary_source,
-            topic: args.topic,
-        }) {
+        Command::Init(args) => match init_project_config(&args.project) {
+            Ok(outcome) if outcome.created => {
+                output.status(
+                    StatusKind::Ok,
+                    &format!("config: {}", outcome.path.display()),
+                );
+                ExitCode::SUCCESS
+            }
+            Ok(outcome) => {
+                output.status(
+                    StatusKind::Warn,
+                    &format!("config already exists: {}", outcome.path.display()),
+                );
+                ExitCode::SUCCESS
+            }
+            Err(error) => {
+                eprintln!("error: {error}");
+                ExitCode::from(1)
+            }
+        },
+        Command::Route(args) => match build_route_args(args).and_then(render::write_route_packet) {
             Ok(outcome) => {
                 output.status(
                     StatusKind::Ok,
@@ -126,18 +150,21 @@ fn main() -> ExitCode {
                 output.status(StatusKind::Warn, "needs_input: changed_source");
                 return ExitCode::from(2);
             }
+            let pack = args.pack;
+            let max_lines = args.max_lines;
+            let route = match build_route_args(args.docs) {
+                Ok(route) => route,
+                Err(error) => {
+                    eprintln!("error: {error}");
+                    return ExitCode::from(1);
+                }
+            };
 
             match render::write_closeout_packet(CoreCloseoutArgs {
-                route: RouteArgs {
-                    project: args.docs.project,
-                    dev_docs: args.docs.dev_docs,
-                    record_docs: args.docs.record_docs,
-                    summary_source: args.docs.summary_source,
-                    topic: args.docs.topic,
-                },
+                route,
                 source,
-                pack: args.pack,
-                max_lines: args.max_lines,
+                pack,
+                max_lines,
             }) {
                 Ok(outcome) => {
                     output.status(
@@ -190,6 +217,25 @@ fn main() -> ExitCode {
                 ExitCode::from(1)
             }
         },
+    }
+}
+
+fn build_route_args(args: CommonDocArgs) -> Result<RouteArgs, String> {
+    let config = load_project_config(&args.project)?;
+    Ok(RouteArgs {
+        project: args.project,
+        dev_docs: prefer_cli(args.dev_docs, config.dev_docs),
+        record_docs: prefer_cli(args.record_docs, config.record_docs),
+        summary_source: prefer_cli(args.summary_source, config.summary_source),
+        topic: prefer_cli(args.topic, config.topic),
+    })
+}
+
+fn prefer_cli<T>(cli: Vec<T>, configured: Vec<T>) -> Vec<T> {
+    if cli.is_empty() {
+        configured
+    } else {
+        cli
     }
 }
 

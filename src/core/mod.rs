@@ -6,6 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 
 pub(crate) mod closeout;
+pub(crate) mod config;
 pub(crate) mod diff;
 pub(crate) mod tokens;
 pub(crate) mod verify;
