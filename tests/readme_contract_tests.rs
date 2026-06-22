@@ -4,6 +4,45 @@ use std::path::Path;
 use regex::Regex;
 
 #[test]
+fn github_workflows_cover_ci_and_release_contract() {
+    let ci = fs::read_to_string(".github/workflows/ci.yml").expect("read CI workflow");
+    let release =
+        fs::read_to_string(".github/workflows/release.yml").expect("read release workflow");
+
+    serde_yaml::from_str::<serde_yaml::Value>(&ci).expect("parse CI workflow YAML");
+    serde_yaml::from_str::<serde_yaml::Value>(&release).expect("parse release workflow YAML");
+
+    for required in [
+        "cargo fmt --all --check",
+        "cargo clippy --all-targets -- -D warnings",
+        "cargo test",
+    ] {
+        assert!(ci.contains(required), "missing CI command: {required}");
+    }
+
+    for required in [
+        "tags:",
+        "\"v*\"",
+        "x86_64-unknown-linux-gnu",
+        "macos-15-intel",
+        "x86_64-apple-darwin",
+        "aarch64-apple-darwin",
+        "x86_64-pc-windows-msvc",
+        "maintenance-linux-x64",
+        "maintenance-macos-x64",
+        "maintenance-macos-arm64",
+        "maintenance-windows-x64.exe",
+        "gh release create",
+        "gh release upload",
+    ] {
+        assert!(
+            release.contains(required),
+            "missing release workflow phrase: {required}"
+        );
+    }
+}
+
+#[test]
 fn readme_points_to_docs_directory() {
     let readme = fs::read_to_string("README.md").expect("read README");
 
@@ -19,6 +58,12 @@ fn readme_contains_public_bilingual_contract() {
     for required in [
         "## What It Does",
         "## Install",
+        "GitHub Releases",
+        "maintenance-windows-x64.exe",
+        "maintenance-macos-x64",
+        "maintenance-macos-arm64",
+        "maintenance-linux-x64",
+        "cargo install --git https://github.com/QianYan-Art/maintenance",
         "## Usage",
         "## Change Sources",
         "## Boundaries",
@@ -26,6 +71,7 @@ fn readme_contains_public_bilingual_contract() {
         "# Doc Maintenance（中文）",
         "## 项目定位",
         "## 安装",
+        "从 GitHub Releases 下载预编译二进制",
         "## 用法",
         "## 三类改动来源",
         "## 禁止事项",
@@ -39,7 +85,9 @@ fn readme_contains_public_bilingual_contract() {
         "No MCP server",
         "不新增 MCP Server",
         "Git-tracked source package",
+        "Compiled binaries are attached to GitHub Releases",
         "Git 跟踪的源码包",
+        "二进制由 `v*` tag workflow 上传到 GitHub Releases",
         ".mission/",
         ".doc-maintenance/",
         ".serena/",
