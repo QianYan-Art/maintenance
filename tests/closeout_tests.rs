@@ -37,6 +37,11 @@ fn latest_run(project: &Path) -> PathBuf {
     entries.pop().expect("latest run")
 }
 
+fn manifest_json(project: &Path) -> serde_json::Value {
+    let manifest = fs::read_to_string(latest_run(project).join("manifest.json")).expect("manifest");
+    serde_json::from_str(&manifest).expect("manifest json")
+}
+
 fn git(project: &Path, args: &[&str]) {
     let status = Command::new("git")
         .arg("-C")
@@ -219,4 +224,159 @@ fn closeout_pack_is_bounded_and_contextual() {
     assert!(pack.contains("OLD_ENV"));
     assert!(pack.contains("title: # Config"));
     assert!(!pack.contains("FILLER_LINE_50"));
+}
+
+#[test]
+fn closeout_excludes_tokens_that_are_both_added_and_removed() {
+    let project = temp_project("closeout-token-diff");
+    write(&project.join("README.md"), "No option documented yet.\n");
+    write(
+        &project.join("change.json"),
+        r#"{
+  "files": [
+    {
+      "path": "README.md",
+      "removed": ["cargo run -- closeout --pack --max-lines 100"],
+      "added": ["cargo run -- closeout --pack --max-lines 200"]
+    }
+  ]
+}
+"#,
+    );
+
+    let output = maintenance()
+        .args(["closeout", "--project"])
+        .arg(&project)
+        .args(["--change-manifest", "change.json", "--plain"])
+        .output()
+        .expect("run closeout");
+
+    assert!(output.status.success());
+    let manifest = manifest_json(&project);
+    let closeout = &manifest["closeout"];
+    assert!(!closeout["removed_tokens"]
+        .as_array()
+        .expect("removed tokens")
+        .iter()
+        .any(|token| token == "--max-lines"));
+    assert!(!closeout["missing_tokens"]
+        .as_array()
+        .expect("missing tokens")
+        .iter()
+        .any(|token| token == "--max-lines"));
+    let packet = fs::read_to_string(latest_run(&project).join("packet.md")).expect("packet");
+    assert!(!packet.contains("stale` `--max-lines"));
+}
+
+#[test]
+fn verify_checks_stale_tokens_against_impact_paths_only() {
+    let project = temp_project("verify-impact-paths");
+    write(&project.join("README.md"), "Document OLD_ENV here.\n");
+    write(
+        &project.join("docs").join("other.md"),
+        "No token here yet.\n",
+    );
+    write(
+        &project.join("change.json"),
+        r#"{
+  "files": [
+    {
+      "path": "src/app.rs",
+      "removed": ["let old = \"OLD_ENV\";"],
+      "added": ["let new = \"NEW_ENV\";"]
+    }
+  ]
+}
+"#,
+    );
+
+    let output = maintenance()
+        .args(["closeout", "--project"])
+        .arg(&project)
+        .args(["--change-manifest", "change.json", "--plain"])
+        .output()
+        .expect("run closeout");
+    assert!(output.status.success());
+
+    write(&project.join("README.md"), "Document NEW_ENV here.\n");
+    write(
+        &project.join("docs").join("other.md"),
+        "This separate doc may mention OLD_ENV without being the stale impact path.\n",
+    );
+
+    let verify = maintenance()
+        .args(["verify", "--project"])
+        .arg(&project)
+        .arg("--plain")
+        .output()
+        .expect("run verify");
+    assert!(
+        verify.status.success(),
+        "verify stdout:\n{}\nverify stderr:\n{}",
+        String::from_utf8_lossy(&verify.stdout),
+        String::from_utf8_lossy(&verify.stderr)
+    );
+}
+
+#[test]
+fn verify_selects_latest_manifest_by_closeout_payload() {
+    let project = temp_project("verify-closeout-manifest");
+    write(&project.join("README.md"), "Document OLD_ENV here.\n");
+    write(
+        &project.join("change.json"),
+        r#"{
+  "files": [
+    {
+      "path": "src/app.rs",
+      "removed": ["let old = \"OLD_ENV\";"],
+      "added": ["let new = \"NEW_ENV\";"]
+    }
+  ]
+}
+"#,
+    );
+
+    let output = maintenance()
+        .args(["closeout", "--project"])
+        .arg(&project)
+        .args(["--change-manifest", "change.json", "--plain"])
+        .output()
+        .expect("run closeout");
+    assert!(output.status.success());
+    write(&project.join("README.md"), "Document NEW_ENV here.\n");
+
+    let newer_run = project
+        .join(".doc-maintenance")
+        .join("runs")
+        .join("9999999999999");
+    let fake_manifest = serde_json::json!({
+        "schema_version": 1,
+        "command": "closeout",
+        "project": project.display().to_string().replace('\\', "/"),
+        "inputs": {
+            "dev_docs": [],
+            "record_docs": [],
+            "summary_source": [],
+            "topic": []
+        },
+        "candidates": [],
+        "rules": []
+    });
+    write(
+        &newer_run.join("manifest.json"),
+        &serde_json::to_string_pretty(&fake_manifest).expect("fake manifest"),
+    );
+
+    let verify = maintenance()
+        .args(["verify", "--project"])
+        .arg(&project)
+        .arg("--plain")
+        .output()
+        .expect("run verify");
+    assert!(
+        verify.status.success(),
+        "verify stdout:\n{}\nverify stderr:\n{}",
+        String::from_utf8_lossy(&verify.stdout),
+        String::from_utf8_lossy(&verify.stderr)
+    );
 }

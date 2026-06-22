@@ -82,7 +82,7 @@ fn load_git_uncommitted(project: &Path) -> Result<ChangeSet, ChangeSetError> {
             kind: "git_uncommitted".to_string(),
             detail: "working tree and index".to_string(),
         },
-        files: merge_files(files),
+        files: merge_files(filter_internal_files(files)),
     })
 }
 
@@ -102,12 +102,16 @@ fn load_untracked(project: &Path) -> Result<Vec<ChangedFile>, ChangeSetError> {
     }
     let mut files = Vec::new();
     for path in String::from_utf8_lossy(&output.stdout).lines() {
-        let full_path = project.join(path);
+        let path = path.replace('\\', "/");
+        if is_internal_change_path(&path) {
+            continue;
+        }
+        let full_path = project.join(&path);
         let Ok(text) = fs::read_to_string(&full_path) else {
             continue;
         };
         files.push(ChangedFile {
-            path: path.replace('\\', "/"),
+            path,
             added: text.lines().map(|line| line.to_string()).collect(),
             removed: Vec::new(),
         });
@@ -123,7 +127,7 @@ fn load_git_since(project: &Path, revision: &str) -> Result<ChangeSet, ChangeSet
             kind: "git_since".to_string(),
             detail: revision.to_string(),
         },
-        files: merge_files(parse_git_diff(&diff)),
+        files: merge_files(filter_internal_files(parse_git_diff(&diff))),
     })
 }
 
@@ -251,4 +255,18 @@ fn merge_files(files: Vec<ChangedFile>) -> Vec<ChangedFile> {
         entry.removed.extend(file.removed);
     }
     merged.into_values().collect()
+}
+
+fn filter_internal_files(files: Vec<ChangedFile>) -> Vec<ChangedFile> {
+    files
+        .into_iter()
+        .filter(|file| !is_internal_change_path(&file.path))
+        .collect()
+}
+
+fn is_internal_change_path(path: &str) -> bool {
+    let path = path.replace('\\', "/");
+    matches!(path.as_str(), ".doc-maintenance" | ".mission")
+        || path.starts_with(".doc-maintenance/")
+        || path.starts_with(".mission/")
 }

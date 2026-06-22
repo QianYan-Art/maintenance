@@ -69,8 +69,16 @@ impl CloseoutArgs {
             .collect::<BTreeSet<_>>()
             .into_iter()
             .collect::<Vec<_>>();
-        let new_tokens = added_tokens.keys().cloned().collect::<Vec<_>>();
-        let removed_tokens_list = removed_tokens.keys().cloned().collect::<Vec<_>>();
+        let added_token_set = added_tokens.keys().cloned().collect::<BTreeSet<_>>();
+        let removed_token_set = removed_tokens.keys().cloned().collect::<BTreeSet<_>>();
+        let new_tokens = added_token_set
+            .difference(&removed_token_set)
+            .cloned()
+            .collect::<Vec<_>>();
+        let removed_tokens_list = removed_token_set
+            .difference(&added_token_set)
+            .cloned()
+            .collect::<Vec<_>>();
         let possible_doc_impact =
             find_doc_impact(&project, &manifest, &new_tokens, &removed_tokens_list);
         let impacted_new = possible_doc_impact

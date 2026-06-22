@@ -36,19 +36,21 @@ pub(crate) fn verify_project(project: &Path) -> Result<VerifyReport, String> {
         .map(|candidate| project.join(PathBuf::from(&candidate.path)))
         .collect::<Vec<_>>();
 
-    let stale_tokens = closeout
+    let stale_impacts = closeout
         .possible_doc_impact
         .iter()
         .filter(|impact| impact.signal == DocImpactSignal::Stale)
-        .map(|impact| impact.token.clone())
+        .map(|impact| (impact.path.clone(), impact.token.clone()))
         .collect::<BTreeSet<_>>();
 
-    let mut stale_remaining = Vec::new();
-    for token in stale_tokens {
-        if docs_contain(&docs, &token) {
-            stale_remaining.push(token);
+    let mut stale_remaining = BTreeSet::new();
+    for (path, token) in stale_impacts {
+        let doc = project.join(PathBuf::from(path));
+        if path_contains(&doc, &token) {
+            stale_remaining.insert(token);
         }
     }
+    let stale_remaining = stale_remaining.into_iter().collect::<Vec<_>>();
 
     let mut missing_remaining = Vec::new();
     for token in &closeout.missing_tokens {
@@ -76,7 +78,9 @@ fn latest_closeout_manifest(project: &Path) -> Result<PathBuf, String> {
         }
         let text = fs::read_to_string(&manifest)
             .map_err(|error| format!("cannot read {}: {error}", manifest.display()))?;
-        if text.contains("\"command\": \"closeout\"") {
+        let manifest_json: Manifest = serde_json::from_str(&text)
+            .map_err(|error| format!("invalid manifest {}: {error}", manifest.display()))?;
+        if manifest_json.closeout.is_some() {
             manifests.push(manifest);
         }
     }
@@ -87,9 +91,11 @@ fn latest_closeout_manifest(project: &Path) -> Result<PathBuf, String> {
 }
 
 fn docs_contain(docs: &[PathBuf], token: &str) -> bool {
-    docs.iter().any(|path| {
-        fs::read_to_string(path)
-            .map(|text| text.contains(token))
-            .unwrap_or(false)
-    })
+    docs.iter().any(|path| path_contains(path, token))
+}
+
+fn path_contains(path: &Path, token: &str) -> bool {
+    fs::read_to_string(path)
+        .map(|text| text.contains(token))
+        .unwrap_or(false)
 }
