@@ -29,10 +29,6 @@ fn github_workflows_cover_ci_and_release_contract() {
         "x86_64-apple-darwin",
         "aarch64-apple-darwin",
         "x86_64-pc-windows-msvc",
-        "maintenance-linux-x64",
-        "maintenance-macos-x64",
-        "maintenance-macos-arm64",
-        "maintenance-windows-x64.exe",
         "doc-maintenance-skill-linux-x64.tar.gz",
         "doc-maintenance-skill-macos-x64.tar.gz",
         "doc-maintenance-skill-macos-arm64.tar.gz",
@@ -49,6 +45,19 @@ fn github_workflows_cover_ci_and_release_contract() {
         assert!(
             release.contains(required),
             "missing release workflow phrase: {required}"
+        );
+    }
+
+    for forbidden in [
+        "asset_name:",
+        "maintenance-linux-x64",
+        "maintenance-macos-x64",
+        "maintenance-macos-arm64",
+        "maintenance-windows-x64.exe",
+    ] {
+        assert!(
+            !release.contains(forbidden),
+            "release workflow should not upload bare executable asset: {forbidden}"
         );
     }
 }
@@ -72,10 +81,10 @@ fn readme_contains_public_bilingual_contract() {
     for required in [
         "## What it does",
         "## Install",
-        "maintenance-windows-x64.exe",
-        "maintenance-macos-x64",
-        "maintenance-macos-arm64",
-        "maintenance-linux-x64",
+        "doc-maintenance-skill-windows-x64.zip",
+        "doc-maintenance-skill-macos-x64.tar.gz",
+        "doc-maintenance-skill-macos-arm64.tar.gz",
+        "doc-maintenance-skill-linux-x64.tar.gz",
         "cargo install --git https://github.com/QianYan-Art/maintenance",
         "## Use it as a skill",
         "maintenance --help",
@@ -109,6 +118,7 @@ fn readme_contains_public_bilingual_contract() {
     assert!(!readme.contains("## Boundaries"));
     assert!(!readme.contains("## Release Boundary"));
     assert!(!readme.contains("must be on your"));
+    assert!(!readme.contains("Grab the binary for your platform"));
 }
 
 #[test]

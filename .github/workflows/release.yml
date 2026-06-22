@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build ${{ matrix.asset_name }}
+    name: Build ${{ matrix.skill_bundle_name }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -18,22 +18,18 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            asset_name: maintenance-linux-x64
             skill_bundle_name: doc-maintenance-skill-linux-x64.tar.gz
             extension: ""
           - os: macos-15-intel
             target: x86_64-apple-darwin
-            asset_name: maintenance-macos-x64
             skill_bundle_name: doc-maintenance-skill-macos-x64.tar.gz
             extension: ""
           - os: macos-14
             target: aarch64-apple-darwin
-            asset_name: maintenance-macos-arm64
             skill_bundle_name: doc-maintenance-skill-macos-arm64.tar.gz
             extension: ""
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            asset_name: maintenance-windows-x64.exe
             skill_bundle_name: doc-maintenance-skill-windows-x64.zip
             extension: ".exe"
 
@@ -53,7 +49,6 @@ jobs:
           mkdir -p dist
           binary_path="target/${{ matrix.target }}/release/maintenance${{ matrix.extension }}"
           bundle_root="bundle-root/doc-maintenance"
-          cp "$binary_path" "dist/${{ matrix.asset_name }}"
           mkdir -p "$bundle_root/bin"
           cp "skill/doc-maintenance/SKILL.md" "$bundle_root/SKILL.md"
           cp "$binary_path" "$bundle_root/bin/maintenance${{ matrix.extension }}"
@@ -66,7 +61,7 @@ jobs:
       - name: Upload release assets
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.asset_name }}-assets
+          name: ${{ matrix.skill_bundle_name }}
           path: dist/*
           if-no-files-found: error
 
@@ -93,5 +88,5 @@ jobs:
           else
             gh release create "$TAG_NAME" dist/* \
               --title "$TAG_NAME" \
-              --notes "Prebuilt maintenance binaries for Windows x64, macOS x64, macOS arm64, and Linux x64."
+              --notes "Doc Maintenance skill bundles for Windows x64, macOS x64, macOS arm64, and Linux x64."
           fi

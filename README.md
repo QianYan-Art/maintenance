@@ -13,13 +13,13 @@ A lightweight CLI and agent skill that keeps project documentation in sync with 
 
 ## Install
 
-**From a release — no Rust required.** Grab the binary for your platform from the [Releases](https://github.com/QianYan-Art/maintenance/releases) page and either put it somewhere on your `PATH` or call it by its full path:
+**From a release — no Rust required.** Download `doc-maintenance-skill-<platform>` from [Releases](https://github.com/QianYan-Art/maintenance/releases), unpack it, and use the bundled binary from `doc-maintenance/bin/`; call it by its full path, or optionally put that `bin/` directory on your `PATH`:
 
-- `maintenance-windows-x64.exe`
-- `maintenance-macos-x64`, `maintenance-macos-arm64`
-- `maintenance-linux-x64`
+- `doc-maintenance-skill-windows-x64.zip`
+- `doc-maintenance-skill-macos-x64.tar.gz`, `doc-maintenance-skill-macos-arm64.tar.gz`
+- `doc-maintenance-skill-linux-x64.tar.gz`
 
-On macOS and Linux, run `chmod +x` on the downloaded file first.
+On macOS and Linux, run `chmod +x` on the bundled `doc-maintenance/bin/maintenance` first.
 
 **From source:**
 
