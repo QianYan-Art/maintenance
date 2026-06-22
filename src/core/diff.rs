@@ -43,20 +43,6 @@ impl ChangeSet {
     pub(crate) fn changed_files(&self) -> Vec<String> {
         self.files.iter().map(|file| file.path.clone()).collect()
     }
-
-    pub(crate) fn added_lines(&self) -> Vec<String> {
-        self.files
-            .iter()
-            .flat_map(|file| file.added.clone())
-            .collect()
-    }
-
-    pub(crate) fn removed_lines(&self) -> Vec<String> {
-        self.files
-            .iter()
-            .flat_map(|file| file.removed.clone())
-            .collect()
-    }
 }
 
 pub(crate) fn load_change_set(

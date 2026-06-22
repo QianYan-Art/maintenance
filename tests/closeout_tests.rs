@@ -269,6 +269,66 @@ fn closeout_excludes_tokens_that_are_both_added_and_removed() {
 }
 
 #[test]
+fn closeout_extracts_config_keys_only_from_config_files() {
+    let project = temp_project("closeout-config-file-types");
+    write(&project.join("README.md"), "No config documented yet.\n");
+    write(
+        &project.join("change.json"),
+        r#"{
+  "files": [
+    {
+      "path": "config/app.toml",
+      "removed": [],
+      "added": [
+        "server.workers = 4",
+        "log.level = \"debug\"",
+        "env = \"CONFIG_ENV\"",
+        "flag = \"--config-flag\""
+      ]
+    },
+    {
+      "path": "src/lib.rs",
+      "removed": [],
+      "added": [
+        "self.method();",
+        "std.fs();",
+        "let timeout = service.timeout;",
+        "let env = \"CODE_ENV\";",
+        "let flag = \"--code-flag\";"
+      ]
+    }
+  ]
+}
+"#,
+    );
+
+    let output = maintenance()
+        .args(["closeout", "--project"])
+        .arg(&project)
+        .args(["--change-manifest", "change.json", "--plain"])
+        .output()
+        .expect("run closeout");
+
+    assert!(output.status.success());
+    let manifest = manifest_json(&project);
+    let closeout = &manifest["closeout"];
+    let new_tokens = closeout["new_tokens"].as_array().expect("new tokens");
+    for token in [
+        "server.workers",
+        "log.level",
+        "CONFIG_ENV",
+        "CODE_ENV",
+        "--config-flag",
+        "--code-flag",
+    ] {
+        assert!(new_tokens.iter().any(|value| value == token), "{token}");
+    }
+    for token in ["self.method", "std.fs", "service.timeout"] {
+        assert!(!new_tokens.iter().any(|value| value == token), "{token}");
+    }
+}
+
+#[test]
 fn verify_checks_stale_tokens_against_impact_paths_only() {
     let project = temp_project("verify-impact-paths");
     write(&project.join("README.md"), "Document OLD_ENV here.\n");

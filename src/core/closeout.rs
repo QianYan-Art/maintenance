@@ -1,11 +1,11 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
 use crate::core::diff::{load_change_set, ChangeSetError, ChangeSourceRequest};
-use crate::core::tokens::{RegexExtractor, TokenExtractor};
+use crate::core::tokens::{RegexExtractor, TokenCategory, TokenExtractor};
 use crate::core::{display_path, normalize_project, DocumentLane, Manifest, RouteArgs};
 
 #[derive(Debug)]
@@ -60,8 +60,18 @@ impl CloseoutArgs {
             ChangeSetError::Other(message) => CloseoutError::Other(message),
         })?;
         let extractor = RegexExtractor::new().map_err(CloseoutError::Other)?;
-        let added_tokens = extractor.extract(&change_set.added_lines());
-        let removed_tokens = extractor.extract(&change_set.removed_lines());
+        let mut added_tokens = BTreeMap::new();
+        let mut removed_tokens = BTreeMap::new();
+        for file in &change_set.files {
+            merge_tokens(
+                &mut added_tokens,
+                extractor.extract_for_path(&file.path, &file.added),
+            );
+            merge_tokens(
+                &mut removed_tokens,
+                extractor.extract_for_path(&file.path, &file.removed),
+            );
+        }
         let changed_categories = added_tokens
             .values()
             .chain(removed_tokens.values())
@@ -111,6 +121,15 @@ impl CloseoutArgs {
             "verify checks stale tokens are absent and missing tokens are present".to_string(),
         );
         Ok(manifest)
+    }
+}
+
+fn merge_tokens(
+    output: &mut BTreeMap<String, TokenCategory>,
+    tokens: BTreeMap<String, TokenCategory>,
+) {
+    for (token, category) in tokens {
+        output.entry(token).or_insert(category);
     }
 }
 
