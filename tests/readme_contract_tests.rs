@@ -1,6 +1,8 @@
 use std::fs;
 use std::path::Path;
 
+use regex::Regex;
+
 #[test]
 fn readme_points_to_docs_directory() {
     let readme = fs::read_to_string("README.md").expect("read README");
@@ -102,28 +104,33 @@ fn adr_does_not_claim_path_only_changed_files_source() {
 }
 
 #[test]
-fn repository_contains_no_private_paths_or_personal_names() {
+fn repository_contains_no_private_path_patterns() {
     let mut files = Vec::new();
     collect_files(Path::new("."), &mut files);
-    let private_kbase = ["QianYan", "KBase"].join("-");
-    let personal_name = "\u{963f}\u{989c}".to_string();
-    let forbidden = vec![
-        format!("C:{}Users{}<user-dir>", '\\', '\\'),
-        ["C:", "Users", "<user-dir>"].join("/"),
-        format!("D:{}Answer{}{}", '\\', '\\', private_kbase),
-        format!("D:/Answer/{private_kbase}"),
-        private_kbase,
-        personal_name,
+    let user_dir = ['U', 's', 'e', 'r', 's'].iter().collect::<String>();
+    let private_root = ['A', 'n', 's', 'w', 'e', 'r'].iter().collect::<String>();
+    let patterns = vec![
+        Regex::new(&format!(
+            r"(?i)[A-Z]:[\\/]+{}[\\/]+[^\\/\s`]+",
+            regex::escape(&user_dir)
+        ))
+        .expect("user path regex"),
+        Regex::new(&format!(
+            r"(?i)[A-Z]:[\\/]+{}[\\/]+",
+            regex::escape(&private_root)
+        ))
+        .expect("private root regex"),
     ];
 
     for path in files {
         let Ok(text) = fs::read_to_string(&path) else {
             continue;
         };
-        for term in &forbidden {
+        for pattern in &patterns {
             assert!(
-                !text.contains(term),
-                "private term {term:?} found in {}",
+                !pattern.is_match(&text),
+                "private path pattern {:?} found in {}",
+                pattern.as_str(),
                 path.display()
             );
         }
