@@ -65,7 +65,7 @@ cargo run -- verify --project . --plain
 - `packet.md` 只列候选路径、lane、命中原因、changed files、tokens 和 possible doc impact。
 - `packet.md` 不内联文档正文。
 - `manifest.json` 是生成文件的单一数据源。
-- `--record-docs` 无默认值；只有阿颜或当前任务显式点名时才处理 KBase 记录文档。
+- `--record-docs` 无默认值；只有使用者或当前任务显式点名时才处理 KBase 记录文档。
 
 ## Fallback
 
