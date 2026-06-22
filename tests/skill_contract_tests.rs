@@ -8,8 +8,7 @@ fn skill_contract_contains_required_workflow_rules() {
     let skill = fs::read_to_string(SKILL_PATH).expect("read skill");
 
     for required in [
-        "禁止在运行 CLI 前递归读取",
-        "maintenance <command> --plain",
+        "before running the CLI",
         "maintenance closeout --project . --git uncommitted",
         "--git uncommitted",
         "--since <git-ref>",
@@ -21,7 +20,7 @@ fn skill_contract_contains_required_workflow_rules() {
         "path:line",
         "verify",
         "--pack --max-lines 200",
-        "packet.md` 不内联文档正文",
+        "never inlines document bodies",
     ] {
         assert!(
             skill.contains(required),
@@ -31,17 +30,30 @@ fn skill_contract_contains_required_workflow_rules() {
 }
 
 #[test]
+fn skill_contract_locates_binary_without_touching_env() {
+    let skill = fs::read_to_string(SKILL_PATH).expect("read skill");
+
+    for required in [
+        "Locate the binary",
+        "Prefer a full path",
+        "ask the user",
+        "do not modify PATH or any environment variable without the user's consent",
+    ] {
+        assert!(
+            skill.contains(required),
+            "missing binary-resolution rule: {required}"
+        );
+    }
+}
+
+#[test]
 fn skill_contract_does_not_invite_heavy_or_unsafe_integrations() {
     let skill = fs::read_to_string(SKILL_PATH).expect("read skill");
 
-    for forbidden in ["禁止新增 MCP Server", "模型 API", "禁止自动写外部记忆工具"]
-    {
-        assert!(
-            skill.contains(forbidden),
-            "missing prohibition: {forbidden}"
-        );
+    for required in ["MCP server", "model API", "external memory tools"] {
+        assert!(skill.contains(required), "missing prohibition: {required}");
     }
-    assert!(!skill.contains("读取 API key"));
+    assert!(!skill.contains("API key"));
 }
 
 #[test]
@@ -49,16 +61,8 @@ fn skill_package_uses_neutral_layout_and_wording() {
     let skill = fs::read_to_string(SKILL_PATH).expect("read skill");
 
     assert!(skill.contains("name: doc-maintenance"));
-    assert!(skill.contains("description: Use after project code changes when the agent"));
-    assert!(skill.contains("主 agent"));
-    assert!(skill.contains("记录文档"));
-    assert!(skill.contains("源码开发场景"));
-    assert!(skill.contains("cargo run -- <command> --plain"));
-    assert!(skill.contains("已安装 skill 运行"));
-    assert!(skill.contains("`PATH`"));
-    assert!(skill.contains("不要依赖相对 `bin/` 路径"));
-    assert!(!skill.contains("bin\\maintenance.exe <command>"));
-    assert!(!skill.contains("./bin/maintenance <command>"));
+    assert!(skill.contains("description: Syncs project dev docs"));
+
     let codex = ['C', 'o', 'd', 'e', 'x'].iter().collect::<String>();
     let old_record_label = ['K', 'B', 'a', 's', 'e'].iter().collect::<String>();
     let old_memory_tool = ["nowledge", "-mem"].concat();

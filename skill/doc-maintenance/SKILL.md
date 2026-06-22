@@ -1,80 +1,47 @@
 ---
 name: doc-maintenance
-description: Use after project code changes when the agent must update project development docs or explicitly named record docs without recursively reading every doc first.
+description: Syncs project dev docs (and explicitly named record docs) with code changes via a small packet and a read-only subagent review — without reading every doc. Use after a change when docs may be stale.
 ---
 
 # Doc Maintenance
 
-先运行内置 CLI 生成短 packet，再让只读子代理审阅候选文档；主 agent 只根据子代理给出的 `path:line` 证据编辑文档。
+Run the bundled CLI to produce a short packet, have a read-only subagent review the candidate documents, then make precise edits based only on the `path:line` evidence it returns.
 
-## 禁止
+## Locate the binary
 
-- 禁止在运行 CLI 前递归读取 `docs/`、记录文档或整棵项目文档。
-- 禁止新增 MCP Server、模型 API、后台服务或密钥配置。
-- 禁止自动写外部记忆工具。
-- 禁止读取或修改任意 `archived` 路径；它只能被列为历史参考。
+Before running a command, resolve the path to the `maintenance` executable, in order:
 
-## 命令
+1. **Prefer a full path.** If you can determine this skill's own directory, use the `bin/maintenance` (`bin\maintenance.exe` on Windows) inside it.
+2. **Check PATH.** Run `where maintenance` (Windows) or `command -v maintenance` (macOS/Linux); if found, call `maintenance` directly.
+3. **Otherwise ask the user** for the binary's location.
 
-源码开发场景（在仓库内运行）：
+Call it by the resolved path, e.g. `<path> closeout --project . --git uncommitted --plain`. Do not assume it is on PATH, and **do not modify PATH or any environment variable without the user's consent** — adding it to PATH is an optional convenience the user chooses. (Inside the source repo, `cargo run -- <command> --plain` also works.)
 
-```powershell
-cargo run -- <command> --plain
+## Never
+
+- Recursively read `docs/`, record docs, or the whole project before running the CLI.
+- Add an MCP server, model API, background service, or secret config.
+- Write to external memory tools.
+- Read or modify any `archived` path; list it as historical reference only.
+
+## Commands
+
+```
+maintenance init --project .                        # write local config (won't overwrite)
+maintenance route --project .                       # reading route on handoff
+maintenance closeout --project . --git uncommitted  # closeout after a change
+maintenance verify --project .                      # confirm the edits closed the loop
 ```
 
-已安装 skill 运行（要求 `maintenance` 二进制已在 `PATH`）：
+`closeout` requires exactly one content-bearing source — `--git uncommitted`, `--since <git-ref>`, or `--change-manifest <path>`. Path-only changed-files are rejected; on a missing source, stop and handle `needs_input: changed_source`.
 
-```powershell
-maintenance <command> --plain
-```
+## Flow
 
-作为已安装 skill 使用时不要依赖相对 `bin/` 路径；skill 目录内的 `bin/` 只用于打包占位与本机复制便利。
-
-已安装 skill 的最小调用：
-
-```powershell
-maintenance init --project . --plain
-maintenance route --project . --plain
-maintenance closeout --project . --git uncommitted --plain
-maintenance verify --project . --plain
-```
-
-`init` 只生成本地 `.doc-maintenance/config.toml`，不会覆盖已存在配置。配置可写默认 `dev_docs`、`record_docs`、`topic`；字段留空时沿用自动发现开发文档、不默认读取记录文档的规则。命令行显式传入的路径和 topic 优先于配置。
-
-`closeout` 必须且只能使用一种带内容改动来源：
-
-- `--git uncommitted`
-- `--since <git-ref>`
-- `--change-manifest <path>`
-
-不要使用纯路径 changed-files；缺少改动来源时停止该流程并处理 `needs_input: changed_source`。
-
-## 流程
-
-1. 首次在项目使用时可运行 `init` 写入本地默认配置。
-2. 任务开始或接手时运行 `route`，只读取生成的 `packet.md`。
-3. 完成代码改动后运行 `closeout`。
-4. 把生成的 `subagent-prompt.md` 交给只读子代理。
-5. 子代理只读候选路径，不编辑文件，并按三类返回：
-   - `stale`: 已过期内容，必须带 `path:line` 和命中 token。
-   - `update`: 需更新内容，必须带 `path:line` 和命中 token。
-   - `missing`: 需新增内容，必须给出目标路径和命中 token。
-6. 主 agent 只读取子代理返回的必要 `path:line` 片段并编辑开发文档或显式点名的记录文档。
-7. 编辑完成后运行 `verify`；若仍有 stale 或 missing，继续修文档并重跑 `verify`。
-
-## Packet 规则
-
-- `packet.md` 只列候选路径、lane、命中原因、changed files、tokens 和 possible doc impact。
-- `packet.md` 不内联文档正文。
-- `manifest.json` 是生成文件的单一数据源。
-- `--record-docs` 无默认值；只有使用者或当前任务显式点名时才处理记录文档。
+1. Run `closeout`. The packet lists candidate paths and hit reasons only — it never inlines document bodies; `manifest.json` is the single source of truth.
+2. Hand `subagent-prompt.md` to a read-only subagent. It edits nothing and returns `path:line` evidence in three kinds: `stale` (now outdated), `update` (needs change), `missing` (needs adding) — each with the matched token.
+3. Read only those lines and edit the dev docs (or explicitly named record docs). `--record-docs` has no default; record docs are touched only when named.
+4. Run `verify`; if any `stale` or `missing` remain, fix and re-run.
 
 ## Fallback
 
-只有子代理不可用时，才允许运行：
-
-```powershell
-maintenance closeout --project . --git uncommitted --pack --max-lines 200 --plain
-```
-
-`pack.md` 是限额兜底材料，不是长期事实源；读完仍必须编辑目标文档并运行 `verify`。
+Only if a subagent is unavailable: `maintenance closeout --project . --git uncommitted --pack --max-lines 200`. The resulting `pack.md` is a bounded crutch, not a source of truth; you must still edit the docs and run `verify`.

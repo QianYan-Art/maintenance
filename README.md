@@ -29,13 +29,15 @@ cargo install --git https://github.com/QianYan-Art/maintenance
 
 ## Use it as a skill
 
-The skill is `skill/doc-maintenance/SKILL.md` plus the `maintenance` CLI it drives. The skill calls the binary by name, so the binary must be on your `PATH`.
+The skill is `skill/doc-maintenance/SKILL.md` plus the `maintenance` CLI it drives. The skill resolves the binary by a full path (or asks you for it), so it works without changing any environment variable.
 
-**From a release bundle (easiest):** download `doc-maintenance-skill-<platform>` from [Releases](https://github.com/QianYan-Art/maintenance/releases) and unpack it. Drop the `doc-maintenance/` folder into your agent's skills directory — for example, the per-user skills folder used by Claude Code or Codex — and put the bundled `bin/maintenance` on your `PATH`.
+**From a release bundle (easiest):** download `doc-maintenance-skill-<platform>` from [Releases](https://github.com/QianYan-Art/maintenance/releases) and unpack it. Drop the `doc-maintenance/` folder into your agent's skills directory — for example, the per-user skills folder used by Claude Code or Codex. The binary ships with it in `bin/`.
 
-**Manual:** put the `maintenance` binary on your `PATH` (verify with `maintenance --help`), then copy `skill/doc-maintenance/` into that skills directory.
+**From source:** copy `skill/doc-maintenance/` into that skills directory and put the built binary in its `bin/`.
 
-Either way, the agent loads it from the `SKILL.md` front matter and runs it when docs need updating after a change.
+The agent loads it from the `SKILL.md` front matter and runs it when docs need updating after a change.
+
+**Optional — add to PATH:** put the binary's directory on your `PATH` (verify with `maintenance --help`) so you can also call a bare `maintenance`. This is a convenience only; automated installers should ask before modifying your `PATH`.
 
 ## Usage
 
