@@ -48,6 +48,10 @@ Pure path-only changed-files input is intentionally unsupported.
 - No automatic global skill overwrite.
 - No edits to paths containing `archived`.
 
+## Release Boundary
+
+Publish the Git-tracked source package, not a raw local workspace archive. Do not include ignored local or generated directories such as `.mission/`, `.doc-maintenance/`, `.serena/`, or `target/`.
+
 ## Development
 
 ```powershell
@@ -114,6 +118,10 @@ cargo run -- verify --project . --plain
 - 不自动写外部记忆工具。
 - 不自动覆盖全局 skill。
 - 不读取或修改包含 `archived` 的路径。
+
+## 发布边界
+
+开源发布应使用 Git 跟踪的源码包，不要直接打包本地工作区。不要包含被忽略的本地过程、运行或构建目录，例如 `.mission/`、`.doc-maintenance/`、`.serena/`、`target/`。
 
 开发文档集中维护在 `docs/`：
 

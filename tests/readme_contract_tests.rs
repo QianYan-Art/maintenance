@@ -20,12 +20,14 @@ fn readme_contains_public_bilingual_contract() {
         "## Usage",
         "## Change Sources",
         "## Boundaries",
+        "## Release Boundary",
         "# Doc Maintenance（中文）",
         "## 项目定位",
         "## 安装",
         "## 用法",
         "## 三类改动来源",
         "## 禁止事项",
+        "## 发布边界",
         "cargo run -- init --project . --plain",
         "cargo run -- route --project . --plain",
         "cargo run -- closeout --project . --git uncommitted --plain",
@@ -34,6 +36,12 @@ fn readme_contains_public_bilingual_contract() {
         "--change-manifest <path>",
         "No MCP server",
         "不新增 MCP Server",
+        "Git-tracked source package",
+        "Git 跟踪的源码包",
+        ".mission/",
+        ".doc-maintenance/",
+        ".serena/",
+        "target/",
         "MIT",
     ] {
         assert!(
@@ -70,6 +78,10 @@ fn docs_usage_contains_install_and_workflow_contract() {
         "不自动覆盖",
         "<user-skills-dir>",
         ".doc-maintenance/",
+        ".mission/",
+        ".serena/",
+        "target/",
+        "开源发布应使用 Git 跟踪的源码包",
     ] {
         assert!(
             usage.contains(required),
