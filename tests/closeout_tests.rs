@@ -65,8 +65,8 @@ fn closeout_change_manifest_and_verify_close_the_loop() {
   "files": [
     {
       "path": "src/app.rs",
-      "removed": ["let old = \"OLD_ENV\";"],
-      "added": ["let new = \"NEW_ENV\"; let flag = \"--new-flag\"; let key = \"service.new_url\";"]
+      "removed": ["let old = std::env::var(\"OLD_ENV\").unwrap();"],
+      "added": ["let new = std::env::var(\"NEW_ENV\").unwrap(); let flag = \"--new-flag\"; let key = \"service.new_url\";"]
     }
   ]
 }
@@ -118,18 +118,105 @@ fn closeout_change_manifest_and_verify_close_the_loop() {
 }
 
 #[test]
+fn closeout_tracks_token_confidence_and_excludes_heredoc_delimiters() {
+    let project = temp_project("closeout-token-confidence");
+    write(
+        &project.join("README.md"),
+        "No new runtime settings documented yet.\n",
+    );
+    write(
+        &project.join("change.json"),
+        r#"{
+  "files": [
+    {
+      "path": ".env.local",
+      "removed": [],
+      "added": ["APP_ENV=production"]
+    },
+    {
+      "path": "deploy/docker-compose.yml",
+      "removed": [],
+      "added": ["environment:", "  APP_PORT: \"8080\""]
+    },
+    {
+      "path": "scripts/setup.sh",
+      "removed": [],
+      "added": ["cat <<EOF", "echo $SHELL_ENV", "EOF"]
+    },
+    {
+      "path": "src/app.rs",
+      "removed": [],
+      "added": ["let label = \"NOISE_TOKEN\"; std::env::var(\"APP_SECRET\").unwrap();"]
+    }
+  ]
+}
+"#,
+    );
+
+    let output = maintenance()
+        .args(["closeout", "--project"])
+        .arg(&project)
+        .args(["--change-manifest", "change.json", "--plain"])
+        .output()
+        .expect("run closeout");
+
+    assert!(output.status.success());
+    let manifest = manifest_json(&project);
+    assert_eq!(manifest["schema_version"].as_u64(), Some(2));
+    let closeout = &manifest["closeout"];
+    let new_tokens = closeout["new_tokens"].as_array().expect("new tokens");
+    for token in ["APP_ENV", "APP_PORT", "APP_SECRET", "SHELL_ENV"] {
+        assert!(new_tokens.iter().any(|value| value == token), "{token}");
+    }
+    for token in ["EOF", "NOISE_TOKEN"] {
+        assert!(!new_tokens.iter().any(|value| value == token), "{token}");
+    }
+
+    let missing_tokens = closeout["missing_tokens"]
+        .as_array()
+        .expect("missing tokens");
+    assert!(missing_tokens.iter().any(|value| value == "APP_SECRET"));
+    assert!(!missing_tokens.iter().any(|value| value == "NOISE_TOKEN"));
+    assert!(!missing_tokens.iter().any(|value| value == "EOF"));
+
+    let low_confidence = closeout["low_confidence_tokens"]
+        .as_array()
+        .expect("low confidence tokens");
+    assert!(low_confidence
+        .iter()
+        .any(|value| value["token"].as_str() == Some("NOISE_TOKEN")
+            && value["confidence"].as_str() == Some("low")));
+    assert!(!low_confidence
+        .iter()
+        .any(|value| value["token"].as_str() == Some("EOF")));
+
+    let packet = fs::read_to_string(latest_run(&project).join("packet.md")).expect("packet");
+    assert!(packet.contains("Low confidence reference"));
+    assert!(packet.contains("NOISE_TOKEN"));
+}
+
+#[test]
 fn closeout_supports_git_uncommitted_and_since_sources() {
     let project = temp_project("closeout-git");
     write(&project.join("README.md"), "Document OLD_ENV.\n");
-    write(&project.join("src").join("app.txt"), "OLD_ENV\n");
+    write(
+        &project.join("src").join("app.rs"),
+        "std::env::var(\"OLD_ENV\").unwrap();\n",
+    );
     git(&project, &["init"]);
     git(&project, &["config", "user.email", "test@example.invalid"]);
     git(&project, &["config", "user.name", "Test User"]);
     git(&project, &["add", "."]);
     git(&project, &["commit", "-m", "initial"]);
 
-    write(&project.join("src").join("app.txt"), "NEW_ENV\n");
-    write(&project.join("src").join("new-file.txt"), "UNTRACKED_ENV\n");
+    write(
+        &project.join("src").join("app.rs"),
+        "std::env::var(\"NEW_ENV\").unwrap();\n",
+    );
+    write(
+        &project.join("src").join("new-file.sh"),
+        "echo $UNTRACKED_ENV\n",
+    );
     let uncommitted = maintenance()
         .args(["closeout", "--project"])
         .arg(&project)
@@ -196,8 +283,8 @@ fn closeout_pack_is_bounded_and_contextual() {
   "files": [
     {
       "path": "src/app.rs",
-      "removed": ["let old = \"OLD_ENV\";"],
-      "added": ["let new = \"NEW_ENV\";"]
+      "removed": ["let old = std::env::var(\"OLD_ENV\").unwrap();"],
+      "added": ["let new = std::env::var(\"NEW_ENV\").unwrap();"]
     }
   ]
 }
@@ -316,15 +403,30 @@ fn closeout_extracts_config_keys_only_from_config_files() {
     for token in [
         "server.workers",
         "log.level",
-        "CONFIG_ENV",
-        "CODE_ENV",
         "--config-flag",
         "--code-flag",
     ] {
         assert!(new_tokens.iter().any(|value| value == token), "{token}");
     }
-    for token in ["self.method", "std.fs", "service.timeout"] {
+    for token in [
+        "CONFIG_ENV",
+        "CODE_ENV",
+        "self.method",
+        "std.fs",
+        "service.timeout",
+    ] {
         assert!(!new_tokens.iter().any(|value| value == token), "{token}");
+    }
+    let low_confidence = closeout["low_confidence_tokens"]
+        .as_array()
+        .expect("low confidence tokens");
+    for token in ["CONFIG_ENV", "CODE_ENV"] {
+        assert!(
+            low_confidence
+                .iter()
+                .any(|value| value["token"].as_str() == Some(token)),
+            "{token}"
+        );
     }
 }
 
@@ -343,7 +445,7 @@ fn verify_checks_stale_tokens_against_impact_paths_only() {
     {
       "path": "src/app.rs",
       "removed": ["let old = \"OLD_ENV\";"],
-      "added": ["let new = \"NEW_ENV\";"]
+      "added": ["let new = std::env::var(\"NEW_ENV\").unwrap();"]
     }
   ]
 }
@@ -393,7 +495,7 @@ fn verify_checks_missing_tokens_against_recorded_target_path() {
     {
       "path": "src/app.rs",
       "removed": [],
-      "added": ["let new = \"NEW_ENV\";"]
+      "added": ["let new = std::env::var(\"NEW_ENV\").unwrap();"]
     }
   ]
 }

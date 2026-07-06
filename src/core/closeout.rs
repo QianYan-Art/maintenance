@@ -5,7 +5,9 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::core::diff::{load_change_set, ChangeSetError, ChangeSourceRequest};
-use crate::core::tokens::{RegexExtractor, TokenCategory, TokenExtractor};
+use crate::core::tokens::{
+    RegexExtractor, TokenCategory, TokenConfidence, TokenExtractor, TokenMatch,
+};
 use crate::core::{
     display_path, normalize_project, DocumentCandidate, DocumentLane, Manifest, RouteArgs,
 };
@@ -27,8 +29,18 @@ pub(crate) struct CloseoutManifest {
     pub(crate) removed_tokens: Vec<String>,
     pub(crate) missing_tokens: Vec<String>,
     #[serde(default)]
+    pub(crate) low_confidence_tokens: Vec<TokenObservation>,
+    #[serde(default)]
     pub(crate) missing_targets: Vec<MissingTarget>,
     pub(crate) possible_doc_impact: Vec<DocImpact>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct TokenObservation {
+    pub(crate) token: String,
+    pub(crate) category: TokenCategory,
+    pub(crate) confidence: TokenConfidence,
+    pub(crate) evidence: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -86,12 +98,12 @@ impl CloseoutArgs {
         let changed_categories = added_tokens
             .values()
             .chain(removed_tokens.values())
-            .map(|category| category.as_str().to_string())
+            .map(|matched| matched.category.as_str().to_string())
             .collect::<BTreeSet<_>>()
             .into_iter()
             .collect::<Vec<_>>();
-        let added_token_set = added_tokens.keys().cloned().collect::<BTreeSet<_>>();
-        let removed_token_set = removed_tokens.keys().cloned().collect::<BTreeSet<_>>();
+        let added_token_set = high_token_set(&added_tokens);
+        let removed_token_set = high_token_set(&removed_tokens);
         let new_tokens = added_token_set
             .difference(&removed_token_set)
             .cloned()
@@ -113,8 +125,10 @@ impl CloseoutArgs {
             .cloned()
             .collect::<Vec<_>>();
         let missing_targets = find_missing_targets(&project, &manifest, &missing_tokens);
+        let low_confidence_tokens = low_confidence_tokens(&added_tokens, &removed_tokens);
 
         let changed_files = change_set.changed_files();
+        manifest.schema_version = 2;
         manifest.command = "closeout".to_string();
         manifest.closeout = Some(CloseoutManifest {
             source: change_set.source,
@@ -123,6 +137,7 @@ impl CloseoutArgs {
             new_tokens,
             removed_tokens: removed_tokens_list,
             missing_tokens,
+            low_confidence_tokens,
             missing_targets,
             possible_doc_impact,
         });
@@ -176,13 +191,43 @@ fn is_targetable_doc(project: &std::path::Path, candidate: &DocumentCandidate) -
     !candidate.archived && project.join(PathBuf::from(&candidate.path)).is_file()
 }
 
-fn merge_tokens(
-    output: &mut BTreeMap<String, TokenCategory>,
-    tokens: BTreeMap<String, TokenCategory>,
-) {
-    for (token, category) in tokens {
-        output.entry(token).or_insert(category);
+fn merge_tokens(output: &mut BTreeMap<String, TokenMatch>, tokens: BTreeMap<String, TokenMatch>) {
+    for (token, matched) in tokens {
+        match output.get(&token) {
+            Some(existing) if existing.confidence >= matched.confidence => {}
+            _ => {
+                output.insert(token, matched);
+            }
+        }
     }
+}
+
+fn high_token_set(tokens: &BTreeMap<String, TokenMatch>) -> BTreeSet<String> {
+    tokens
+        .iter()
+        .filter(|(_, matched)| matched.confidence == TokenConfidence::High)
+        .map(|(token, _)| token.clone())
+        .collect()
+}
+
+fn low_confidence_tokens(
+    added_tokens: &BTreeMap<String, TokenMatch>,
+    removed_tokens: &BTreeMap<String, TokenMatch>,
+) -> Vec<TokenObservation> {
+    let mut tokens = BTreeMap::new();
+    for (token, matched) in added_tokens.iter().chain(removed_tokens.iter()) {
+        if matched.confidence == TokenConfidence::Low {
+            tokens
+                .entry(token.clone())
+                .or_insert_with(|| TokenObservation {
+                    token: token.clone(),
+                    category: matched.category.clone(),
+                    confidence: matched.confidence.clone(),
+                    evidence: matched.evidence.clone(),
+                });
+        }
+    }
+    tokens.into_values().collect()
 }
 
 fn find_doc_impact(

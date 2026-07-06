@@ -160,8 +160,8 @@ topic = []
   "files": [
     {
       "path": "src/app.rs",
-      "removed": ["let old = \"OLD_ENV\";"],
-      "added": ["let new = \"NEW_ENV\";"]
+      "removed": ["let old = std::env::var(\"OLD_ENV\").unwrap();"],
+      "added": ["let new = std::env::var(\"NEW_ENV\").unwrap();"]
     }
   ]
 }

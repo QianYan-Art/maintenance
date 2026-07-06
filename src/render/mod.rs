@@ -115,6 +115,10 @@ fn render_packet(manifest: &Manifest, subagent_prompt_path: &std::path::Path) ->
             list_or_none(&closeout.missing_tokens)
         ));
         out.push_str(&format!(
+            "- Low confidence reference: {}\n",
+            low_confidence_or_none(closeout)
+        ));
+        out.push_str(&format!(
             "- Missing targets: {}\n",
             missing_targets_or_none(closeout)
         ));
@@ -210,6 +214,26 @@ fn missing_targets_or_none(closeout: &crate::core::closeout::CloseoutManifest) -
                 target.token,
                 target.path,
                 target.lane.title()
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn low_confidence_or_none(closeout: &crate::core::closeout::CloseoutManifest) -> String {
+    if closeout.low_confidence_tokens.is_empty() {
+        return "none".to_string();
+    }
+    closeout
+        .low_confidence_tokens
+        .iter()
+        .map(|token| {
+            format!(
+                "`{}` ({}, {}, {})",
+                token.token,
+                token.category.as_str(),
+                token.confidence.as_str(),
+                token.evidence
             )
         })
         .collect::<Vec<_>>()
