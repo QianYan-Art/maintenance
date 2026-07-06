@@ -3,6 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::core::closeout::DocImpactSignal;
+use crate::core::waivers::load_waivers;
 use crate::core::{normalize_project, Manifest};
 
 #[derive(Debug)]
@@ -19,6 +20,7 @@ impl VerifyReport {
 
 pub(crate) fn verify_project(project: &Path) -> Result<VerifyReport, String> {
     let project = normalize_project(project)?;
+    let waivers = load_waivers(&project)?;
     let manifest_path = latest_closeout_manifest(&project)?;
     let manifest_text = fs::read_to_string(&manifest_path)
         .map_err(|error| format!("cannot read {}: {error}", manifest_path.display()))?;
@@ -40,6 +42,7 @@ pub(crate) fn verify_project(project: &Path) -> Result<VerifyReport, String> {
         .possible_doc_impact
         .iter()
         .filter(|impact| impact.signal == DocImpactSignal::Stale)
+        .filter(|impact| !waivers.contains(&impact.token))
         .map(|impact| (impact.path.clone(), impact.token.clone()))
         .collect::<BTreeSet<_>>();
 
@@ -56,16 +59,23 @@ pub(crate) fn verify_project(project: &Path) -> Result<VerifyReport, String> {
     let targeted_missing = closeout
         .missing_targets
         .iter()
+        .filter(|target| !waivers.contains(&target.token))
         .map(|target| target.token.clone())
         .collect::<BTreeSet<_>>();
     for target in &closeout.missing_targets {
+        if waivers.contains(&target.token) {
+            continue;
+        }
         let doc = project.join(PathBuf::from(&target.path));
         if !path_contains(&doc, &target.token) {
             missing_remaining.insert(target.token.clone());
         }
     }
     for token in &closeout.missing_tokens {
-        if !targeted_missing.contains(token) && !docs_contain(&docs, token) {
+        if !waivers.contains(token)
+            && !targeted_missing.contains(token)
+            && !docs_contain(&docs, token)
+        {
             missing_remaining.insert(token.clone());
         }
     }
@@ -108,6 +118,18 @@ fn docs_contain(docs: &[PathBuf], token: &str) -> bool {
 
 fn path_contains(path: &Path, token: &str) -> bool {
     fs::read_to_string(path)
-        .map(|text| text.contains(token))
+        .map(|text| contains_token(&text, token))
         .unwrap_or(false)
+}
+
+fn contains_token(text: &str, token: &str) -> bool {
+    text.match_indices(token).any(|(index, _)| {
+        let before = text[..index].chars().next_back();
+        let after = text[index + token.len()..].chars().next();
+        !before.map(is_token_char).unwrap_or(false) && !after.map(is_token_char).unwrap_or(false)
+    })
+}
+
+fn is_token_char(character: char) -> bool {
+    character.is_ascii_alphanumeric() || character == '_'
 }

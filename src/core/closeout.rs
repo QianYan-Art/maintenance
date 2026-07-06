@@ -8,6 +8,7 @@ use crate::core::diff::{load_change_set, ChangeSetError, ChangeSourceRequest};
 use crate::core::tokens::{
     RegexExtractor, TokenCategory, TokenConfidence, TokenExtractor, TokenMatch,
 };
+use crate::core::waivers::{load_waivers, WaiverFile};
 use crate::core::{
     display_path, normalize_project, DocumentCandidate, DocumentLane, Manifest, RouteArgs,
 };
@@ -31,6 +32,8 @@ pub(crate) struct CloseoutManifest {
     #[serde(default)]
     pub(crate) low_confidence_tokens: Vec<TokenObservation>,
     #[serde(default)]
+    pub(crate) ignored_tokens: Vec<IgnoredToken>,
+    #[serde(default)]
     pub(crate) missing_targets: Vec<MissingTarget>,
     pub(crate) possible_doc_impact: Vec<DocImpact>,
 }
@@ -41,6 +44,12 @@ pub(crate) struct TokenObservation {
     pub(crate) category: TokenCategory,
     pub(crate) confidence: TokenConfidence,
     pub(crate) evidence: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct IgnoredToken {
+    pub(crate) token: String,
+    pub(crate) reason: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -85,6 +94,7 @@ impl CloseoutArgs {
         let extractor = RegexExtractor::new().map_err(CloseoutError::Other)?;
         let mut added_tokens = BTreeMap::new();
         let mut removed_tokens = BTreeMap::new();
+        let waivers = load_waivers(&project).map_err(CloseoutError::Other)?;
         for file in &change_set.files {
             merge_tokens(
                 &mut added_tokens,
@@ -95,6 +105,10 @@ impl CloseoutArgs {
                 extractor.extract_for_path(&file.path, &file.removed),
             );
         }
+        let ignored_tokens = ignored_tokens(&waivers, &added_tokens, &removed_tokens);
+        let waived_tokens = waivers.tokens();
+        filter_waived_tokens(&mut added_tokens, &waived_tokens);
+        filter_waived_tokens(&mut removed_tokens, &waived_tokens);
         let changed_categories = added_tokens
             .values()
             .chain(removed_tokens.values())
@@ -138,6 +152,7 @@ impl CloseoutArgs {
             removed_tokens: removed_tokens_list,
             missing_tokens,
             low_confidence_tokens,
+            ignored_tokens,
             missing_targets,
             possible_doc_impact,
         });
@@ -228,6 +243,32 @@ fn low_confidence_tokens(
         }
     }
     tokens.into_values().collect()
+}
+
+fn ignored_tokens(
+    waivers: &WaiverFile,
+    added_tokens: &BTreeMap<String, TokenMatch>,
+    removed_tokens: &BTreeMap<String, TokenMatch>,
+) -> Vec<IgnoredToken> {
+    let mut ignored = BTreeMap::new();
+    for token in added_tokens.keys().chain(removed_tokens.keys()) {
+        if let Some(reason) = waivers.reason_for(token) {
+            ignored
+                .entry(token.clone())
+                .or_insert_with(|| reason.to_string());
+        }
+    }
+    ignored
+        .into_iter()
+        .map(|(token, reason)| IgnoredToken { token, reason })
+        .collect()
+}
+
+fn filter_waived_tokens(
+    tokens: &mut BTreeMap<String, TokenMatch>,
+    waived_tokens: &BTreeSet<String>,
+) {
+    tokens.retain(|token, _| !waived_tokens.contains(token));
 }
 
 fn find_doc_impact(

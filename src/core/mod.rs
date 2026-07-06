@@ -10,6 +10,7 @@ pub(crate) mod config;
 pub(crate) mod diff;
 pub(crate) mod tokens;
 pub(crate) mod verify;
+pub(crate) mod waivers;
 
 #[derive(Debug)]
 pub(crate) struct RouteArgs {

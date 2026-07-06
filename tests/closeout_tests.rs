@@ -196,6 +196,92 @@ fn closeout_tracks_token_confidence_and_excludes_heredoc_delimiters() {
 }
 
 #[test]
+fn waive_records_reason_and_filters_closeout_and_verify_tokens() {
+    let project = temp_project("closeout-waivers");
+    write(&project.join("README.md"), "No secret documented here.\n");
+    let waive = maintenance()
+        .args(["waive", "--project"])
+        .arg(&project)
+        .args([
+            "APP_SECRET",
+            "--reason",
+            "runtime secret stays out of docs",
+            "--plain",
+        ])
+        .output()
+        .expect("run waive");
+    assert!(waive.status.success());
+    let waive_again = maintenance()
+        .args(["waive", "--project"])
+        .arg(&project)
+        .args([
+            "APP_SECRET",
+            "--reason",
+            "runtime secret stays out of docs",
+            "--plain",
+        ])
+        .output()
+        .expect("run waive again");
+    assert!(waive_again.status.success());
+    assert!(
+        String::from_utf8_lossy(&waive_again.stdout).contains("waiver already exists"),
+        "stdout:\n{}",
+        String::from_utf8_lossy(&waive_again.stdout)
+    );
+    let waivers =
+        fs::read_to_string(project.join(".doc-maintenance").join("waivers.toml")).expect("waivers");
+    assert_eq!(waivers.matches("token = \"APP_SECRET\"").count(), 1);
+    assert!(waivers.contains("reason = \"runtime secret stays out of docs\""));
+
+    write(
+        &project.join("change.json"),
+        r#"{
+  "files": [
+    {
+      "path": "src/app.rs",
+      "removed": [],
+      "added": ["let secret = std::env::var(\"APP_SECRET\").unwrap();"]
+    }
+  ]
+}
+"#,
+    );
+    let closeout = maintenance()
+        .args(["closeout", "--project"])
+        .arg(&project)
+        .args(["--change-manifest", "change.json", "--plain"])
+        .output()
+        .expect("run closeout");
+    assert!(closeout.status.success());
+    let manifest = manifest_json(&project);
+    let closeout = &manifest["closeout"];
+    assert!(!closeout["missing_tokens"]
+        .as_array()
+        .expect("missing tokens")
+        .iter()
+        .any(|token| token == "APP_SECRET"));
+    assert!(closeout["ignored_tokens"]
+        .as_array()
+        .expect("ignored tokens")
+        .iter()
+        .any(|token| token["token"] == "APP_SECRET"
+            && token["reason"] == "runtime secret stays out of docs"));
+
+    let verify = maintenance()
+        .args(["verify", "--project"])
+        .arg(&project)
+        .arg("--plain")
+        .output()
+        .expect("run verify");
+    assert!(
+        verify.status.success(),
+        "verify stdout:\n{}\nverify stderr:\n{}",
+        String::from_utf8_lossy(&verify.stdout),
+        String::from_utf8_lossy(&verify.stderr)
+    );
+}
+
+#[test]
 fn closeout_supports_git_uncommitted_and_since_sources() {
     let project = temp_project("closeout-git");
     write(&project.join("README.md"), "Document OLD_ENV.\n");
@@ -545,6 +631,98 @@ fn verify_checks_missing_tokens_against_recorded_target_path() {
         "verify stdout:\n{}\nverify stderr:\n{}",
         String::from_utf8_lossy(&right_path_verify.stdout),
         String::from_utf8_lossy(&right_path_verify.stderr)
+    );
+}
+
+#[test]
+fn verify_matches_tokens_on_explicit_word_boundaries() {
+    let project = temp_project("verify-token-boundaries");
+    write(
+        &project.join("README.md"),
+        "OLD_ENV_EXTRA remains. NEW_ENV_EXTRA is not the token.\n",
+    );
+    let manifest = serde_json::json!({
+        "schema_version": 1,
+        "command": "closeout",
+        "project": project.display().to_string().replace('\\', "/"),
+        "inputs": {
+            "dev_docs": ["README.md"],
+            "record_docs": [],
+            "summary_source": [],
+            "topic": []
+        },
+        "candidates": [
+            {
+                "path": "README.md",
+                "lane": "Current Dev Docs",
+                "reason": "explicit document path",
+                "archived": false
+            }
+        ],
+        "rules": [],
+        "closeout": {
+            "source": {
+                "kind": "change_manifest",
+                "detail": "boundary"
+            },
+            "changed_files": ["src/app.rs"],
+            "changed_categories": ["env"],
+            "new_tokens": ["NEW_ENV"],
+            "removed_tokens": ["OLD_ENV"],
+            "missing_tokens": ["NEW_ENV"],
+            "missing_targets": [
+                {
+                    "token": "NEW_ENV",
+                    "path": "README.md",
+                    "lane": "Current Dev Docs"
+                }
+            ],
+            "possible_doc_impact": [
+                {
+                    "token": "OLD_ENV",
+                    "signal": "stale",
+                    "path": "README.md",
+                    "line": 1,
+                    "lane": "Current Dev Docs"
+                }
+            ]
+        }
+    });
+    write(
+        &project
+            .join(".doc-maintenance")
+            .join("runs")
+            .join("1")
+            .join("manifest.json"),
+        &serde_json::to_string_pretty(&manifest).expect("manifest"),
+    );
+
+    let failed_verify = maintenance()
+        .args(["verify", "--project"])
+        .arg(&project)
+        .arg("--plain")
+        .output()
+        .expect("run verify");
+    assert_eq!(failed_verify.status.code(), Some(2));
+    let stdout = String::from_utf8_lossy(&failed_verify.stdout);
+    assert!(!stdout.contains("stale_remaining: OLD_ENV"));
+    assert!(stdout.contains("missing_remaining: NEW_ENV"));
+
+    write(
+        &project.join("README.md"),
+        "OLD_ENV_EXTRA remains. Document NEW_ENV.\n",
+    );
+    let passed_verify = maintenance()
+        .args(["verify", "--project"])
+        .arg(&project)
+        .arg("--plain")
+        .output()
+        .expect("run verify again");
+    assert!(
+        passed_verify.status.success(),
+        "verify stdout:\n{}\nverify stderr:\n{}",
+        String::from_utf8_lossy(&passed_verify.stdout),
+        String::from_utf8_lossy(&passed_verify.stderr)
     );
 }
 

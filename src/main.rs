@@ -10,6 +10,7 @@ mod terminal;
 use core::closeout::{CloseoutArgs as CoreCloseoutArgs, CloseoutError};
 use core::config::{init_project_config, load_project_config};
 use core::diff::ChangeSourceRequest;
+use core::waivers::add_waiver;
 use core::RouteArgs;
 use terminal::{OutputMode, StatusKind};
 
@@ -41,6 +42,9 @@ enum Command {
 
     #[command(about = "Verify that document closeout expectations are satisfied")]
     Verify(VerifyArgs),
+
+    #[command(about = "Record a token waiver with an auditable reason")]
+    Waive(WaiveArgs),
 }
 
 #[derive(Debug, Parser)]
@@ -92,6 +96,17 @@ struct CloseoutArgs {
 struct VerifyArgs {
     #[arg(long, default_value = ".")]
     project: PathBuf,
+}
+
+#[derive(Debug, Parser)]
+struct WaiveArgs {
+    #[arg(long, default_value = ".")]
+    project: PathBuf,
+
+    token: String,
+
+    #[arg(long)]
+    reason: String,
 }
 
 fn main() -> ExitCode {
@@ -211,6 +226,26 @@ fn main() -> ExitCode {
                     println!("missing_remaining: {token}");
                 }
                 ExitCode::from(2)
+            }
+            Err(error) => {
+                eprintln!("error: {error}");
+                ExitCode::from(1)
+            }
+        },
+        Command::Waive(args) => match add_waiver(&args.project, &args.token, &args.reason) {
+            Ok(outcome) if outcome.added => {
+                output.status(
+                    StatusKind::Ok,
+                    &format!("waiver: {}", outcome.path.display()),
+                );
+                ExitCode::SUCCESS
+            }
+            Ok(outcome) => {
+                output.status(
+                    StatusKind::Warn,
+                    &format!("waiver already exists: {}", outcome.path.display()),
+                );
+                ExitCode::SUCCESS
             }
             Err(error) => {
                 eprintln!("error: {error}");
