@@ -83,6 +83,7 @@ fn closeout_change_manifest_and_verify_close_the_loop() {
     assert!(output.status.success());
     let run = latest_run(&project);
     let packet = fs::read_to_string(run.join("packet.md")).expect("packet");
+    let prompt = fs::read_to_string(run.join("subagent-prompt.md")).expect("prompt");
     let manifest = fs::read_to_string(run.join("manifest.json")).expect("manifest");
 
     assert!(packet.contains("src/app.rs"));
@@ -92,6 +93,12 @@ fn closeout_change_manifest_and_verify_close_the_loop() {
     assert!(packet.contains("README.md:1"));
     assert!(manifest.contains("\"command\": \"closeout\""));
     assert!(manifest.contains("\"missing_tokens\""));
+    assert!(prompt.contains("## Change Evidence"));
+    assert!(prompt.contains("Changed files"));
+    assert!(prompt.contains("NEW_ENV"));
+    assert!(prompt.contains("env, high"));
+    assert!(prompt.contains("README.md:1"));
+    assert!(!prompt.contains("Configure OLD_ENV before launching."));
 
     let failed_verify = maintenance()
         .args(["verify", "--project"])

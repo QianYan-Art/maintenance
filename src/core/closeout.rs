@@ -28,6 +28,10 @@ pub(crate) struct CloseoutManifest {
     pub(crate) changed_categories: Vec<String>,
     pub(crate) new_tokens: Vec<String>,
     pub(crate) removed_tokens: Vec<String>,
+    #[serde(default)]
+    pub(crate) new_token_details: Vec<TokenObservation>,
+    #[serde(default)]
+    pub(crate) removed_token_details: Vec<TokenObservation>,
     pub(crate) missing_tokens: Vec<String>,
     #[serde(default)]
     pub(crate) low_confidence_tokens: Vec<TokenObservation>,
@@ -127,6 +131,8 @@ impl CloseoutArgs {
             .difference(&added_token_set)
             .cloned()
             .collect::<Vec<_>>();
+        let new_token_details = token_observations(&new_tokens, &added_tokens);
+        let removed_token_details = token_observations(&removed_tokens_list, &removed_tokens);
         let possible_doc_impact =
             find_doc_impact(&project, &manifest, &new_tokens, &removed_tokens_list);
         let impacted_new = possible_doc_impact
@@ -157,6 +163,8 @@ impl CloseoutArgs {
             changed_categories,
             new_tokens,
             removed_tokens: removed_tokens_list,
+            new_token_details,
+            removed_token_details,
             missing_tokens,
             low_confidence_tokens,
             ignored_tokens,
@@ -343,6 +351,25 @@ fn low_confidence_tokens(
         }
     }
     tokens.into_values().collect()
+}
+
+fn token_observations(
+    tokens: &[String],
+    token_matches: &BTreeMap<String, TokenMatch>,
+) -> Vec<TokenObservation> {
+    tokens
+        .iter()
+        .filter_map(|token| {
+            let matched = token_matches.get(token)?;
+            Some(TokenObservation {
+                token: token.clone(),
+                category: matched.category.clone(),
+                confidence: matched.confidence.clone(),
+                evidence: matched.evidence.clone(),
+                source_path: matched.source_path.clone(),
+            })
+        })
+        .collect()
 }
 
 fn ignored_tokens(

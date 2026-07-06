@@ -157,11 +157,67 @@ fn render_subagent_prompt(manifest: &Manifest) -> String {
     );
     out.push_str("- `update`: existing lines that should be updated, with the token or reason.\n");
     out.push_str("- `missing`: information that should be added, with the best target path.\n\n");
+    if let Some(closeout) = &manifest.closeout {
+        out.push_str("## Change Evidence\n\n");
+        out.push_str(&format!(
+            "- Changed files: {}\n",
+            list_or_none(&closeout.changed_files)
+        ));
+        render_token_evidence(&mut out, "New tokens", &closeout.new_token_details);
+        render_token_evidence(&mut out, "Removed tokens", &closeout.removed_token_details);
+        render_token_evidence(
+            &mut out,
+            "Low confidence reference",
+            &closeout.low_confidence_tokens,
+        );
+        out.push_str("- Possible doc impact:\n");
+        if closeout.possible_doc_impact.is_empty() {
+            out.push_str("  - none\n");
+        } else {
+            for impact in &closeout.possible_doc_impact {
+                let signal = match impact.signal {
+                    DocImpactSignal::Stale => "stale",
+                    DocImpactSignal::Update => "update",
+                };
+                out.push_str(&format!(
+                    "  - `{}` `{}` at `{}:{}` ({})\n",
+                    signal,
+                    impact.token,
+                    impact.path,
+                    impact.line,
+                    impact.lane.title()
+                ));
+            }
+        }
+        out.push('\n');
+    }
     out.push_str("## Candidate Paths\n");
     render_lane(&mut out, manifest, DocumentLane::CurrentDevDocs);
     render_lane(&mut out, manifest, DocumentLane::RecordDocs);
     render_lane(&mut out, manifest, DocumentLane::ArchivedRecords);
     out
+}
+
+fn render_token_evidence(
+    out: &mut String,
+    title: &str,
+    tokens: &[crate::core::closeout::TokenObservation],
+) {
+    out.push_str(&format!("- {title}:\n"));
+    if tokens.is_empty() {
+        out.push_str("  - none\n");
+        return;
+    }
+    for token in tokens {
+        out.push_str(&format!(
+            "  - `{}` ({}, {}, {}, source `{}`)\n",
+            token.token,
+            token.category.as_str(),
+            token.confidence.as_str(),
+            token.evidence,
+            token.source_path
+        ));
+    }
 }
 
 fn render_lane(out: &mut String, manifest: &Manifest, lane: DocumentLane) {
