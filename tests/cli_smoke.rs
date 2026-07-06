@@ -16,6 +16,7 @@ fn help_lists_core_commands() {
     assert!(stdout.contains("route"));
     assert!(stdout.contains("closeout"));
     assert!(stdout.contains("verify"));
+    assert!(stdout.contains("report"));
     assert!(stdout.contains("waive"));
 }
 

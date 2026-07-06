@@ -1,6 +1,9 @@
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use serde::{Deserialize, Serialize};
 
 use crate::core::closeout::DocImpactSignal;
 use crate::core::waivers::load_waivers;
@@ -8,6 +11,14 @@ use crate::core::{normalize_project, Manifest};
 
 #[derive(Debug)]
 pub(crate) struct VerifyReport {
+    pub(crate) stale_remaining: Vec<String>,
+    pub(crate) missing_remaining: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub(crate) struct VerifyOutcome {
+    pub(crate) verified_at: String,
+    pub(crate) result: String,
     pub(crate) stale_remaining: Vec<String>,
     pub(crate) missing_remaining: Vec<String>,
 }
@@ -22,6 +33,10 @@ pub(crate) fn verify_project(project: &Path) -> Result<VerifyReport, String> {
     let project = normalize_project(project)?;
     let waivers = load_waivers(&project)?;
     let manifest_path = latest_closeout_manifest(&project)?;
+    let run_dir = manifest_path
+        .parent()
+        .ok_or_else(|| format!("manifest has no run directory: {}", manifest_path.display()))?
+        .to_path_buf();
     let manifest_text = fs::read_to_string(&manifest_path)
         .map_err(|error| format!("cannot read {}: {error}", manifest_path.display()))?;
     let manifest: Manifest = serde_json::from_str(&manifest_text)
@@ -81,10 +96,12 @@ pub(crate) fn verify_project(project: &Path) -> Result<VerifyReport, String> {
     }
     let missing_remaining = missing_remaining.into_iter().collect::<Vec<_>>();
 
-    Ok(VerifyReport {
+    let report = VerifyReport {
         stale_remaining,
         missing_remaining,
-    })
+    };
+    write_verify_outcome(&run_dir, &report)?;
+    Ok(report)
 }
 
 fn latest_closeout_manifest(project: &Path) -> Result<PathBuf, String> {
@@ -132,4 +149,29 @@ fn contains_token(text: &str, token: &str) -> bool {
 
 fn is_token_char(character: char) -> bool {
     character.is_ascii_alphanumeric() || character == '_'
+}
+
+fn write_verify_outcome(run_dir: &Path, report: &VerifyReport) -> Result<(), String> {
+    let outcome = VerifyOutcome {
+        verified_at: current_unix_ms().to_string(),
+        result: if report.is_ok() {
+            "passed".to_string()
+        } else {
+            "failed".to_string()
+        },
+        stale_remaining: report.stale_remaining.clone(),
+        missing_remaining: report.missing_remaining.clone(),
+    };
+    let text = serde_json::to_string_pretty(&outcome)
+        .map(|json| format!("{json}\n"))
+        .map_err(|error| format!("cannot render verify outcome: {error}"))?;
+    let path = run_dir.join("outcome.json");
+    fs::write(&path, text).map_err(|error| format!("cannot write {}: {error}", path.display()))
+}
+
+fn current_unix_ms() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or(0)
 }

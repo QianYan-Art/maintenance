@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 pub(crate) mod closeout;
 pub(crate) mod config;
 pub(crate) mod diff;
+pub(crate) mod report;
 pub(crate) mod tokens;
 pub(crate) mod verify;
 pub(crate) mod waivers;

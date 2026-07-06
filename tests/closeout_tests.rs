@@ -289,6 +289,83 @@ fn waive_records_reason_and_filters_closeout_and_verify_tokens() {
 }
 
 #[test]
+fn verify_writes_outcome_and_report_summarizes_runs() {
+    let project = temp_project("closeout-report");
+    write(&project.join("README.md"), "No report token yet.\n");
+    write(
+        &project.join("change.json"),
+        r#"{
+  "files": [
+    {
+      "path": "src/app.rs",
+      "removed": [],
+      "added": ["let token = std::env::var(\"APP_REPORT_TOKEN\").unwrap();"]
+    }
+  ]
+}
+"#,
+    );
+    let closeout = maintenance()
+        .args(["closeout", "--project"])
+        .arg(&project)
+        .args(["--change-manifest", "change.json", "--plain"])
+        .output()
+        .expect("run closeout");
+    assert!(closeout.status.success());
+    let run = latest_run(&project);
+
+    let unverified_report = maintenance()
+        .args(["report", "--project"])
+        .arg(&project)
+        .args(["--last", "1", "--plain"])
+        .output()
+        .expect("run report before verify");
+    assert!(unverified_report.status.success());
+    let stdout = String::from_utf8_lossy(&unverified_report.stdout);
+    assert!(stdout.contains("verify=unverified"));
+    assert!(stdout.contains("changed=1"));
+    assert!(stdout.contains("high=1"));
+    assert!(stdout.contains("missing=1"));
+
+    let failed_verify = maintenance()
+        .args(["verify", "--project"])
+        .arg(&project)
+        .arg("--plain")
+        .output()
+        .expect("run verify");
+    assert_eq!(failed_verify.status.code(), Some(2));
+    let outcome = fs::read_to_string(run.join("outcome.json")).expect("outcome");
+    assert!(outcome.contains("\"result\": \"failed\""));
+    assert!(outcome.contains("APP_REPORT_TOKEN"));
+    let failed_report = maintenance()
+        .args(["report", "--project"])
+        .arg(&project)
+        .args(["--last", "1", "--plain"])
+        .output()
+        .expect("run report after failed verify");
+    assert!(String::from_utf8_lossy(&failed_report.stdout).contains("verify=failed"));
+
+    write(
+        &project.join("README.md"),
+        "Document APP_REPORT_TOKEN for local report tests.\n",
+    );
+    let passed_verify = maintenance()
+        .args(["verify", "--project"])
+        .arg(&project)
+        .arg("--plain")
+        .output()
+        .expect("run verify again");
+    assert!(passed_verify.status.success());
+    let passed_report = maintenance()
+        .args(["report", "--project"])
+        .arg(&project)
+        .args(["--last", "1", "--plain"])
+        .output()
+        .expect("run report after passed verify");
+    assert!(String::from_utf8_lossy(&passed_report.stdout).contains("verify=passed"));
+}
+
+#[test]
 fn closeout_routes_missing_tokens_by_source_affinity() {
     let project = temp_project("closeout-affinity-route");
     write(&project.join("README.md"), "General runtime notes.\n");

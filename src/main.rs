@@ -10,6 +10,7 @@ mod terminal;
 use core::closeout::{CloseoutArgs as CoreCloseoutArgs, CloseoutError};
 use core::config::{init_project_config, load_project_config};
 use core::diff::ChangeSourceRequest;
+use core::report::report_project;
 use core::waivers::add_waiver;
 use core::RouteArgs;
 use terminal::{OutputMode, StatusKind};
@@ -42,6 +43,9 @@ enum Command {
 
     #[command(about = "Verify that document closeout expectations are satisfied")]
     Verify(VerifyArgs),
+
+    #[command(about = "Summarize recent doc-maintenance runs")]
+    Report(ReportArgs),
 
     #[command(about = "Record a token waiver with an auditable reason")]
     Waive(WaiveArgs),
@@ -96,6 +100,15 @@ struct CloseoutArgs {
 struct VerifyArgs {
     #[arg(long, default_value = ".")]
     project: PathBuf,
+}
+
+#[derive(Debug, Parser)]
+struct ReportArgs {
+    #[arg(long, default_value = ".")]
+    project: PathBuf,
+
+    #[arg(long, default_value_t = 5)]
+    last: usize,
 }
 
 #[derive(Debug, Parser)]
@@ -226,6 +239,28 @@ fn main() -> ExitCode {
                     println!("missing_remaining: {token}");
                 }
                 ExitCode::from(2)
+            }
+            Err(error) => {
+                eprintln!("error: {error}");
+                ExitCode::from(1)
+            }
+        },
+        Command::Report(args) => match report_project(&args.project, args.last) {
+            Ok(reports) => {
+                for report in reports {
+                    println!(
+                        "run={} source={} changed={} high={} low={} waived={} missing={} verify={}",
+                        report.run_id,
+                        report.source,
+                        report.changed_files,
+                        report.high_tokens,
+                        report.low_tokens,
+                        report.waived_tokens,
+                        report.missing_tokens,
+                        report.verify_result
+                    );
+                }
+                ExitCode::SUCCESS
             }
             Err(error) => {
                 eprintln!("error: {error}");
