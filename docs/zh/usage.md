@@ -19,6 +19,7 @@
 - 未传 `--dev-docs` 时自动发现存在的 `README.md` 和 `docs/`。
 - `--record-docs` 无默认值；记录文档必须人工点名。
 - 路径任一段等于 `archived` 时只列、不读、不改。
+- `--plain` 与 `--no-banner` 去除终端装饰；agent 或脚本消费输出时用 `--plain`。
 
 ## 改动来源
 
@@ -53,6 +54,24 @@ maintenance closeout --project . --git uncommitted --pack --max-lines 200
 ```
 
 `pack.md` 只含候选路径、token、命中行与少量上下文，受 `--max-lines` 限制，不是长期事实源。
+
+## 豁免与运行报表
+
+提取出的 token 带置信度：有使用证据的 token（env 访问模式、`.env` 赋值、compose `environment` 键、flag、config key）为高置信，产生 `missing`/`stale` 义务；裸大写词只进低置信参考区。高置信 token 仍是噪声时，用豁免代替往文档里硬塞：
+
+```sh
+maintenance waive --project . SOME_TOKEN --reason "生成的常量，非用户可见"
+```
+
+豁免连同理由与日期写入 `.doc-maintenance/waivers.toml`；`closeout` 与 `verify` 跳过已豁免 token，并在 manifest 记录为 `ignored_tokens`。绝不为了让 `verify` 通过而添加无信息量的 token 提及。
+
+`verify` 会把 `outcome.json` 写进对应 run 目录。汇总最近的 run：
+
+```sh
+maintenance report --project . --last 5
+```
+
+每行显示 run id、改动来源、改动文件数、高/低置信 token 数、豁免与缺失数，以及 verify 结果（`passed` / `failed` / `unverified`）。
 
 ## 安装到 skill 包
 

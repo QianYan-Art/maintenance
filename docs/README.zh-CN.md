@@ -9,17 +9,18 @@
 - 默认从 `README.md` 和 `docs/` 发现开发文档；只有传入 `--record-docs` 时才读取记录文档。
 - 从 diff 中提取变更的 token（环境变量、命令行 flag、配置键），反查它们影响的文档行。
 - 标记过期行（你删掉的 token 文档里还在讲）和缺失行（你新增的 token 没有任何文档覆盖）。
+- 按使用证据给 token 分级：只有高置信 token 产生义务，裸大写词只进低置信参考区；真正的噪声用 `maintenance waive` 记录可审计的豁免。
 - 全程本地运行：不调用模型 API、不读密钥、不起 MCP Server、不跑后台服务。
 
 ## 安装
 
-**从 Release 下载 —— 无需 Rust。** 在 [Releases](https://github.com/QianYan-Art/maintenance/releases) 页面下载对应平台的二进制，放进系统 `PATH`：
+**从 Release 下载 —— 无需 Rust。** 在 [Releases](https://github.com/QianYan-Art/maintenance/releases) 页面下载对应平台的 `doc-maintenance-skill-<平台>` 压缩包，解压后用 `doc-maintenance/bin/` 里自带的二进制；优先用完整路径调用，也可以选择把该 `bin/` 目录加进 `PATH`：
 
-- `maintenance-windows-x64.exe`
-- `maintenance-macos-x64`、`maintenance-macos-arm64`
-- `maintenance-linux-x64`
+- `doc-maintenance-skill-windows-x64.zip`
+- `doc-maintenance-skill-macos-x64.tar.gz`、`doc-maintenance-skill-macos-arm64.tar.gz`
+- `doc-maintenance-skill-linux-x64.tar.gz`
 
-macOS 和 Linux 下载后先 `chmod +x`。
+macOS 和 Linux 先对解压出的 `doc-maintenance/bin/maintenance` 执行 `chmod +x`。
 
 **从源码安装：**
 
@@ -29,11 +30,15 @@ cargo install --git https://github.com/QianYan-Art/maintenance
 
 ## 作为 skill 使用
 
-skill 就是 `skill/doc-maintenance/SKILL.md` 加上它驱动的 CLI。装进编码 agent 的步骤：
+skill 就是 `skill/doc-maintenance/SKILL.md` 加上它驱动的 CLI。skill 通过完整路径解析二进制（找不到时会询问你），因此无需修改任何环境变量即可工作。
 
-1. **把 `maintenance` 二进制放进 `PATH`**，让 agent 在任何项目目录都能调用。用 `maintenance --help` 验证。
-2. **把 `skill/doc-maintenance/` 复制到你的 agent 的 skills 目录** —— 例如 Claude Code 或 Codex 的按用户 skills 文件夹。
-3. agent 会从 `SKILL.md` 的 front matter 加载它，并在改动后需要更新文档时调用。
+**用 Release 压缩包（最简单）：** 从 [Releases](https://github.com/QianYan-Art/maintenance/releases) 下载 `doc-maintenance-skill-<平台>` 并解压，把 `doc-maintenance/` 目录放进你的 agent 的 skills 目录 —— 例如 Claude Code 或 Codex 的按用户 skills 文件夹。二进制随包附带在 `bin/` 里。
+
+**从源码：** 把 `skill/doc-maintenance/` 复制到该 skills 目录，并把构建好的二进制放进它的 `bin/`。
+
+agent 会从 `SKILL.md` 的 front matter 加载它，并在改动后需要更新文档时调用。
+
+**可选 —— 加进 PATH：** 把二进制所在目录加进 `PATH`（用 `maintenance --help` 验证），就能直接裸调 `maintenance`。这只是便利项；自动安装代理修改 `PATH` 前应先征得你的同意。
 
 ## 用法
 
@@ -41,7 +46,9 @@ skill 就是 `skill/doc-maintenance/SKILL.md` 加上它驱动的 CLI。装进编
 maintenance init --project .                        # 写入本地配置
 maintenance route --project .                       # 接手时的读取路线
 maintenance closeout --project . --git uncommitted  # 改动后的收尾
+maintenance waive --project . TOKEN --reason "原因"  # 可审计的 token 豁免
 maintenance verify --project .                      # 确认编辑闭环
+maintenance report --project . --last 5             # 最近 run 状态
 ```
 
 `init` 会写入 `.doc-maintenance/config.toml`，记录默认的 `dev_docs`、`record_docs`、`topic`。命令行显式参数始终优先于配置。`change-manifest` 的 JSON 格式、配置字段和 pack 兜底详见 [zh/usage.md](zh/usage.md)。

@@ -19,6 +19,7 @@
 - With no `--dev-docs`, the tool discovers `README.md` and `docs/` if present.
 - `--record-docs` has no default; record docs are opt-in.
 - Any path segment equal to `archived` is listed only — never read or edited.
+- `--plain` and `--no-banner` strip terminal decoration; use `--plain` when an agent or script consumes the output.
 
 ## Change sources
 
@@ -53,6 +54,24 @@ maintenance closeout --project . --git uncommitted --pack --max-lines 200
 ```
 
 `pack.md` contains candidate paths, tokens, hit lines, and a little context, bounded by `--max-lines`. It is not a long-term source of truth.
+
+## Waivers and reporting
+
+Extracted tokens carry a confidence level: tokens with usage evidence (env access patterns, `.env` assignments, compose `environment` keys, flags, config keys) are high confidence and create `missing`/`stale` obligations; bare uppercase words are listed as low-confidence reference only. When a high-confidence token is still noise, waive it instead of padding the docs:
+
+```sh
+maintenance waive --project . SOME_TOKEN --reason "generated constant, not user-facing"
+```
+
+Waivers land in `.doc-maintenance/waivers.toml` with the reason and date; `closeout` and `verify` skip waived tokens and record them as `ignored_tokens` in the manifest. Never add an information-free token mention just to make `verify` pass.
+
+`verify` writes an `outcome.json` into the run directory. Summarize recent runs with:
+
+```sh
+maintenance report --project . --last 5
+```
+
+Each line shows the run id, change source, changed-file count, high/low token counts, waived and missing counts, and the verify result (`passed` / `failed` / `unverified`).
 
 ## Install into a skill package
 

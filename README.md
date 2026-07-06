@@ -9,6 +9,7 @@ A lightweight CLI and agent skill that keeps project documentation in sync with 
 - Discovers development docs from `README.md` and `docs/` by default; reads record docs only when you pass `--record-docs`.
 - Extracts changed tokens — environment variables, flags, config keys — from a diff and maps them back to the doc lines they affect.
 - Flags stale lines (a token you removed that a doc still mentions) and missing ones (a token you added that no doc covers).
+- Grades tokens by usage evidence: only high-confidence tokens create obligations, bare uppercase words stay in a low-confidence reference list, and `maintenance waive` records an auditable exemption for real noise.
 - Runs entirely locally: no model API, no secrets, no MCP server, no background service.
 
 ## Install
@@ -45,7 +46,9 @@ The agent loads it from the `SKILL.md` front matter and runs it when docs need u
 maintenance init --project .                        # write local config
 maintenance route --project .                       # reading route on handoff
 maintenance closeout --project . --git uncommitted  # closeout after changes
+maintenance waive --project . TOKEN --reason "why"  # auditable token waiver
 maintenance verify --project .                      # confirm the edits closed the loop
+maintenance report --project . --last 5             # recent run status
 ```
 
 `init` writes `.doc-maintenance/config.toml` with your default `dev_docs`, `record_docs`, and `topic`. Explicit flags always override the config.
