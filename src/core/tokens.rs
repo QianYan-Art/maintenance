@@ -46,6 +46,7 @@ pub(crate) struct TokenMatch {
     pub(crate) category: TokenCategory,
     pub(crate) confidence: TokenConfidence,
     pub(crate) evidence: String,
+    pub(crate) source_path: String,
 }
 
 pub(crate) trait TokenExtractor {
@@ -103,6 +104,7 @@ impl RegexExtractor {
         category: TokenCategory,
         confidence: TokenConfidence,
         evidence: impl Into<String>,
+        source_path: &str,
     ) {
         if value.len() < 3 || self.stopwords.contains(value) {
             return;
@@ -111,6 +113,7 @@ impl RegexExtractor {
             category,
             confidence,
             evidence: evidence.into(),
+            source_path: source_path.to_string(),
         };
         match output.get(value) {
             Some(existing) if existing.confidence >= incoming.confidence => {}
@@ -127,6 +130,7 @@ impl RegexExtractor {
             TokenCategory::ConfigKey,
             TokenConfidence::High,
             evidence_path(path),
+            path,
         );
     }
 
@@ -153,7 +157,14 @@ impl RegexExtractor {
                 }
                 let (confidence, evidence) =
                     env_confidence(path, line, value, yaml_environment_key);
-                self.insert(&mut output, value, TokenCategory::Env, confidence, evidence);
+                self.insert(
+                    &mut output,
+                    value,
+                    TokenCategory::Env,
+                    confidence,
+                    evidence,
+                    path,
+                );
             }
             for matched in self.flag.find_iter(line) {
                 self.insert(
@@ -162,6 +173,7 @@ impl RegexExtractor {
                     TokenCategory::Flag,
                     TokenConfidence::High,
                     "pattern:flag",
+                    path,
                 );
             }
             if include_config_keys {

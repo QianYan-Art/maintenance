@@ -282,6 +282,58 @@ fn waive_records_reason_and_filters_closeout_and_verify_tokens() {
 }
 
 #[test]
+fn closeout_routes_missing_tokens_by_source_affinity() {
+    let project = temp_project("closeout-affinity-route");
+    write(&project.join("README.md"), "General runtime notes.\n");
+    write(
+        &project.join("docs").join("deployment.md"),
+        "Deployment settings live here.\n",
+    );
+    write(
+        &project.join("change.json"),
+        r#"{
+  "files": [
+    {
+      "path": "deployment/docker/config.rs",
+      "removed": [],
+      "added": ["let limit = std::env::var(\"APP_LOG_MAX_FILE\").unwrap();"]
+    }
+  ]
+}
+"#,
+    );
+
+    let first = maintenance()
+        .args(["closeout", "--project"])
+        .arg(&project)
+        .args(["--change-manifest", "change.json", "--plain"])
+        .output()
+        .expect("run closeout");
+    assert!(first.status.success());
+    let first_manifest = manifest_json(&project);
+    let first_targets = first_manifest["closeout"]["missing_targets"]
+        .as_array()
+        .expect("missing targets");
+    assert!(first_targets
+        .iter()
+        .any(|target| target["token"] == "APP_LOG_MAX_FILE"
+            && target["path"] == "docs/deployment.md"));
+
+    let second = maintenance()
+        .args(["closeout", "--project"])
+        .arg(&project)
+        .args(["--change-manifest", "change.json", "--plain"])
+        .output()
+        .expect("run closeout again");
+    assert!(second.status.success());
+    let second_manifest = manifest_json(&project);
+    let second_targets = second_manifest["closeout"]["missing_targets"]
+        .as_array()
+        .expect("missing targets");
+    assert_eq!(first_targets, second_targets);
+}
+
+#[test]
 fn closeout_supports_git_uncommitted_and_since_sources() {
     let project = temp_project("closeout-git");
     write(&project.join("README.md"), "Document OLD_ENV.\n");
