@@ -418,6 +418,100 @@ fn closeout_routes_missing_tokens_by_source_affinity() {
 }
 
 #[test]
+fn closeout_replay_fixture_is_desensitized_and_verifies_after_doc_edit() {
+    let fixture = include_str!("fixtures/closeout_replay_manifest.json");
+    for forbidden in ["D:", "C:"] {
+        assert!(!fixture.contains(forbidden), "fixture leaked {forbidden}");
+    }
+    // Desensitization: every uppercase identifier must be the heredoc marker
+    // under test or use the neutral APP_ fixture prefix.
+    let mut uppercase_tokens = std::collections::BTreeSet::new();
+    let mut current = String::new();
+    for character in fixture.chars() {
+        if character.is_ascii_uppercase()
+            || character == '_'
+            || (character.is_ascii_digit() && !current.is_empty())
+        {
+            current.push(character);
+        } else {
+            if current.len() >= 3 && !current.starts_with('_') {
+                uppercase_tokens.insert(current.clone());
+            }
+            current.clear();
+        }
+    }
+    for token in uppercase_tokens {
+        assert!(
+            token == "EOF" || token.starts_with("APP_"),
+            "fixture token {token} must use the neutral APP_ prefix"
+        );
+    }
+
+    let project = temp_project("closeout-replay-fixture");
+    write(&project.join("README.md"), "General runtime notes.\n");
+    write(
+        &project.join("docs").join("deployment.md"),
+        "Deployment settings live here.\n",
+    );
+    write(&project.join("change.json"), fixture);
+
+    let closeout = maintenance()
+        .args(["closeout", "--project"])
+        .arg(&project)
+        .args(["--change-manifest", "change.json", "--plain"])
+        .output()
+        .expect("run closeout");
+    assert!(closeout.status.success());
+    let manifest = manifest_json(&project);
+    let closeout = &manifest["closeout"];
+    let new_tokens = closeout["new_tokens"].as_array().expect("new tokens");
+    let missing_tokens = closeout["missing_tokens"]
+        .as_array()
+        .expect("missing tokens");
+    let low_confidence = closeout["low_confidence_tokens"]
+        .as_array()
+        .expect("low confidence tokens");
+    assert!(new_tokens.iter().any(|token| token == "APP_LOG_MAX_FILE"));
+    for token in ["EOF", "APP_LOG_NOISE_WORD"] {
+        assert!(!new_tokens.iter().any(|value| value == token), "{token}");
+        assert!(
+            !missing_tokens.iter().any(|value| value == token),
+            "{token}"
+        );
+    }
+    assert!(!low_confidence
+        .iter()
+        .any(|value| value["token"].as_str() == Some("EOF")));
+    assert!(low_confidence
+        .iter()
+        .any(|value| value["token"].as_str() == Some("APP_LOG_NOISE_WORD")));
+    let targets = closeout["missing_targets"]
+        .as_array()
+        .expect("missing targets");
+    assert!(targets
+        .iter()
+        .any(|target| target["token"] == "APP_LOG_MAX_FILE"
+            && target["path"] == "docs/deployment.md"));
+
+    write(
+        &project.join("docs").join("deployment.md"),
+        "Deployment settings include APP_LOG_MAX_FILE for local log rotation.\n",
+    );
+    let verify = maintenance()
+        .args(["verify", "--project"])
+        .arg(&project)
+        .arg("--plain")
+        .output()
+        .expect("run verify");
+    assert!(
+        verify.status.success(),
+        "verify stdout:\n{}\nverify stderr:\n{}",
+        String::from_utf8_lossy(&verify.stdout),
+        String::from_utf8_lossy(&verify.stderr)
+    );
+}
+
+#[test]
 fn closeout_supports_git_uncommitted_and_since_sources() {
     let project = temp_project("closeout-git");
     write(&project.join("README.md"), "Document OLD_ENV.\n");

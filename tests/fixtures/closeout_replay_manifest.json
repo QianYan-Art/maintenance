@@ -1,0 +1,14 @@
+{
+  "files": [
+    {
+      "path": "deployment/docker/logging.rs",
+      "removed": [],
+      "added": [
+        "let max_file = std::env::var(\"APP_LOG_MAX_FILE\").unwrap();",
+        "cat <<EOF",
+        "EOF",
+        "let label = \"APP_LOG_NOISE_WORD\";"
+      ]
+    }
+  ]
+}
