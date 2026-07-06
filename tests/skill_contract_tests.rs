@@ -14,6 +14,11 @@ fn skill_contract_contains_required_workflow_rules() {
         "--since <git-ref>",
         "--change-manifest <path>",
         "subagent-prompt.md",
+        "maintenance waive --project .",
+        "maintenance report --project . --last 5",
+        "high-confidence `missing` or `stale` obligations",
+        "Quick path",
+        "information-free token mentions",
         "`stale`",
         "`update`",
         "`missing`",
@@ -44,6 +49,27 @@ fn skill_contract_locates_binary_without_touching_env() {
             "missing binary-resolution rule: {required}"
         );
     }
+}
+
+#[test]
+fn sync_installed_skills_script_is_manual_and_env_safe() {
+    let script = fs::read_to_string("scripts/sync-installed-skills.ps1").expect("read sync script");
+
+    for required in [
+        "cargo build --release",
+        ".codex\\skills\\doc-maintenance",
+        ".claude\\skills\\doc-maintenance",
+        "skill\\doc-maintenance",
+        "Copy-Item",
+    ] {
+        assert!(
+            script.contains(required),
+            "missing sync script phrase: {required}"
+        );
+    }
+    assert!(!script.contains("PATH"));
+    assert!(!script.contains("SetEnvironmentVariable"));
+    assert!(!script.contains("Register-ScheduledTask"));
 }
 
 #[test]

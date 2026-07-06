@@ -23,6 +23,7 @@ Call it by the resolved path, e.g. `<path> closeout --project . --git uncommitte
 - Add an MCP server, model API, background service, or secret config.
 - Write to external memory tools.
 - Read or modify any `archived` path; list it as historical reference only.
+- Add empty, information-free token mentions just to make `verify` pass; if a token is noise, use `maintenance waive --project . <TOKEN> --reason "<why>"` and keep the reason auditable.
 
 ## Commands
 
@@ -30,10 +31,14 @@ Call it by the resolved path, e.g. `<path> closeout --project . --git uncommitte
 maintenance init --project .                        # write local config (won't overwrite)
 maintenance route --project .                       # reading route on handoff
 maintenance closeout --project . --git uncommitted  # closeout after a change
+maintenance waive --project . TOKEN --reason "why"  # auditable token waiver
 maintenance verify --project .                      # confirm the edits closed the loop
+maintenance report --project . --last 5             # recent run status
 ```
 
 `closeout` requires exactly one content-bearing source — `--git uncommitted`, `--since <git-ref>`, or `--change-manifest <path>`. Path-only changed-files are rejected; on a missing source, stop and handle `needs_input: changed_source`.
+
+Quick path: when `closeout` has no high-confidence `missing` or `stale` obligations, skip the subagent and run `verify` to close out.
 
 ## Flow
 
