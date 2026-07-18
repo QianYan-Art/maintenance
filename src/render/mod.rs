@@ -2,7 +2,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use crate::core::closeout::{CloseoutArgs, CloseoutError, DocImpactSignal};
-use crate::core::{run_dir, DocumentLane, Manifest, RouteArgs};
+use crate::core::{ensure_artifact_dir, run_dir, DocumentLane, Manifest, RouteArgs};
 
 mod pack;
 
@@ -29,7 +29,9 @@ fn write_packet_files(
     manifest: Manifest,
     pack_options: Option<usize>,
 ) -> Result<PacketOutcome, String> {
-    let out_dir = run_dir(PathBuf::from(&manifest.project).as_path());
+    let project = PathBuf::from(&manifest.project);
+    ensure_artifact_dir(&project)?;
+    let out_dir = run_dir(&project);
     fs::create_dir_all(&out_dir).map_err(|error| {
         format!(
             "cannot create output directory {}: {error}",

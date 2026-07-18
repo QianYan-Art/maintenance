@@ -31,6 +31,7 @@ impl VerifyReport {
 
 pub(crate) fn verify_project(project: &Path) -> Result<VerifyReport, String> {
     let project = normalize_project(project)?;
+    crate::core::ensure_artifact_dir(&project)?;
     let waivers = load_waivers(&project)?;
     let manifest_path = latest_closeout_manifest(&project)?;
     let run_dir = manifest_path

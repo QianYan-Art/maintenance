@@ -27,20 +27,13 @@ pub(crate) struct InitConfigOutcome {
 }
 
 pub(crate) fn init_project_config(project: &Path) -> Result<InitConfigOutcome, String> {
-    let path = project_config_path(project)?;
+    let project = normalize_project(project)?;
+    let path = crate::core::ensure_artifact_dir(&project)?.join(CONFIG_FILE);
     if path.exists() {
         return Ok(InitConfigOutcome {
             path,
             created: false,
         });
-    }
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| {
-            format!(
-                "cannot create config directory {}: {error}",
-                parent.display()
-            )
-        })?;
     }
     fs::write(&path, default_config_template())
         .map_err(|error| format!("cannot write config {}: {error}", path.display()))?;

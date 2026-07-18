@@ -1077,3 +1077,64 @@ fn verify_selects_latest_manifest_by_closeout_payload() {
         String::from_utf8_lossy(&verify.stderr)
     );
 }
+
+#[test]
+fn artifact_dir_self_ignores_and_rejects_missing_project() {
+    let project = temp_project("closeout-artifact-boundary");
+    write(&project.join("README.md"), "Doc body.\n");
+    write(
+        &project.join("change.json"),
+        r#"{"files":[{"path":"src/app.rs","removed":[],"added":["let key = std::env::var(\"BOUNDARY_ENV\").unwrap();"]}]}"#,
+    );
+
+    let closeout = maintenance()
+        .args(["closeout", "--project"])
+        .arg(&project)
+        .args(["--change-manifest", "change.json", "--plain"])
+        .output()
+        .expect("run closeout");
+    assert!(closeout.status.success());
+    let gitignore = fs::read_to_string(project.join(".doc-maintenance").join(".gitignore"))
+        .expect("self-ignoring gitignore");
+    assert_eq!(gitignore.trim(), "*");
+
+    let missing = project.join("does-not-exist");
+    let rejected = maintenance()
+        .args(["closeout", "--project"])
+        .arg(&missing)
+        .args(["--change-manifest", "change.json", "--plain"])
+        .output()
+        .expect("run closeout on missing project");
+    assert!(!rejected.status.success());
+    let stderr = String::from_utf8_lossy(&rejected.stderr);
+    assert!(
+        stderr.contains("does not exist"),
+        "unexpected stderr: {stderr}"
+    );
+}
+
+#[test]
+fn report_marks_incomplete_run_directories() {
+    let project = temp_project("report-incomplete-run");
+    fs::create_dir_all(
+        project
+            .join(".doc-maintenance")
+            .join("runs")
+            .join("1700000000000"),
+    )
+    .expect("create empty run dir");
+
+    let report = maintenance()
+        .args(["report", "--project"])
+        .arg(&project)
+        .arg("--plain")
+        .output()
+        .expect("run report");
+    assert!(
+        report.status.success(),
+        "report stderr: {}",
+        String::from_utf8_lossy(&report.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&report.stdout);
+    assert!(stdout.contains("incomplete"), "unexpected stdout: {stdout}");
+}

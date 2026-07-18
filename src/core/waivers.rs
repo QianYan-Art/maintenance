@@ -73,7 +73,8 @@ pub(crate) fn add_waiver(
         return Err("waive reason must not be empty".to_string());
     }
 
-    let path = waivers_path(project)?;
+    let normalized = normalize_project(project)?;
+    let path = crate::core::ensure_artifact_dir(&normalized)?.join(WAIVERS_FILE);
     let mut waivers = load_waivers(project)?;
     if waivers.contains(token) {
         return Ok(WaiveOutcome { path, added: false });
@@ -83,14 +84,6 @@ pub(crate) fn add_waiver(
         reason: reason.to_string(),
         date: today_utc(),
     });
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| {
-            format!(
-                "cannot create waivers directory {}: {error}",
-                parent.display()
-            )
-        })?;
-    }
     let text = toml::to_string_pretty(&waivers)
         .map_err(|error| format!("cannot render waivers {}: {error}", path.display()))?;
     fs::write(&path, text)

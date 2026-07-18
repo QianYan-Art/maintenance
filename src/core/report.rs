@@ -36,16 +36,28 @@ pub(crate) fn report_project(project: &Path, last: usize) -> Result<Vec<RunRepor
 }
 
 fn summarize_run(run_dir: &Path) -> Result<RunReport, String> {
-    let manifest_path = run_dir.join("manifest.json");
-    let manifest_text = fs::read_to_string(&manifest_path)
-        .map_err(|error| format!("cannot read {}: {error}", manifest_path.display()))?;
-    let manifest: Manifest = serde_json::from_str(&manifest_text)
-        .map_err(|error| format!("invalid manifest {}: {error}", manifest_path.display()))?;
     let run_id = run_dir
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or("<unknown>")
         .to_string();
+    let manifest_path = run_dir.join("manifest.json");
+    if !manifest_path.exists() {
+        return Ok(RunReport {
+            run_id,
+            source: "incomplete".to_string(),
+            changed_files: 0,
+            high_tokens: 0,
+            low_tokens: 0,
+            waived_tokens: 0,
+            missing_tokens: 0,
+            verify_result: "incomplete".to_string(),
+        });
+    }
+    let manifest_text = fs::read_to_string(&manifest_path)
+        .map_err(|error| format!("cannot read {}: {error}", manifest_path.display()))?;
+    let manifest: Manifest = serde_json::from_str(&manifest_text)
+        .map_err(|error| format!("invalid manifest {}: {error}", manifest_path.display()))?;
     let Some(closeout) = manifest.closeout else {
         return Ok(RunReport {
             run_id,

@@ -126,6 +126,24 @@ pub(crate) fn run_dir(project: &Path) -> PathBuf {
         .join(format!("{millis}"))
 }
 
+/// Create `<project>/.doc-maintenance` with a self-ignoring `.gitignore` so
+/// run artifacts never enter Git regardless of the host repository's config.
+pub(crate) fn ensure_artifact_dir(project: &Path) -> Result<PathBuf, String> {
+    let dir = project.join(".doc-maintenance");
+    fs::create_dir_all(&dir).map_err(|error| {
+        format!(
+            "cannot create artifact directory {}: {error}",
+            dir.display()
+        )
+    })?;
+    let gitignore = dir.join(".gitignore");
+    if !gitignore.exists() {
+        fs::write(&gitignore, "*\n")
+            .map_err(|error| format!("cannot write {}: {error}", gitignore.display()))?;
+    }
+    Ok(dir)
+}
+
 pub(crate) fn normalize_project(project: &Path) -> Result<PathBuf, String> {
     let path = if project.as_os_str().is_empty() {
         PathBuf::from(".")
@@ -139,12 +157,12 @@ pub(crate) fn normalize_project(project: &Path) -> Result<PathBuf, String> {
             .map_err(|error| format!("cannot read current directory: {error}"))?
             .join(path)
     };
-    fs::create_dir_all(&absolute).map_err(|error| {
-        format!(
-            "cannot create or access project {}: {error}",
+    if !absolute.is_dir() {
+        return Err(format!(
+            "project directory does not exist: {}",
             absolute.display()
-        )
-    })?;
+        ));
+    }
     Ok(clean_path(absolute))
 }
 
