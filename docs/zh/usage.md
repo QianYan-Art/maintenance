@@ -20,6 +20,8 @@
 - `--record-docs` 无默认值；记录文档必须人工点名。
 - 路径任一段等于 `archived` 时只列、不读、不改。
 - `--plain` 与 `--no-banner` 去除终端装饰；agent 或脚本消费输出时用 `--plain`。
+- `--project` 必须是已存在的目录 —— 只能是工作项目本身，绝不能指向记录文档库。
+- 所有产物都在 `<project>/.doc-maintenance/` 下；CLI 会在其中写入自我忽略的 `.gitignore`，该目录不会进入 Git。
 
 ## 改动来源
 

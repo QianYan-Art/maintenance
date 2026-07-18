@@ -19,6 +19,8 @@ fn skill_contract_contains_required_workflow_rules() {
         "high-confidence `missing` or `stale` obligations",
         "Quick path",
         "information-free token mentions",
+        "record-docs vault",
+        "self-ignoring `.gitignore`",
         "`stale`",
         "`update`",
         "`missing`",

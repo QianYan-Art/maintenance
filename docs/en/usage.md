@@ -20,6 +20,8 @@
 - `--record-docs` has no default; record docs are opt-in.
 - Any path segment equal to `archived` is listed only — never read or edited.
 - `--plain` and `--no-banner` strip terminal decoration; use `--plain` when an agent or script consumes the output.
+- `--project` must be an existing directory — the working project itself, never the record-docs vault.
+- All artifacts live under `<project>/.doc-maintenance/`; the CLI writes a self-ignoring `.gitignore` inside it, so the directory stays out of Git.
 
 ## Change sources
 

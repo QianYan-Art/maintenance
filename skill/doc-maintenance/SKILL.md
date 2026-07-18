@@ -24,6 +24,7 @@ Call it by the resolved path, e.g. `<path> closeout --project . --git uncommitte
 - Write to external memory tools.
 - Read or modify any `archived` path; list it as historical reference only.
 - Add empty, information-free token mentions just to make `verify` pass; if a token is noise, use `maintenance waive --project . <TOKEN> --reason "<why>"` and keep the reason auditable.
+- Point `--project` at a record-docs vault or knowledge base. `--project` is always the working project directory; record docs enter only via absolute `--record-docs` paths, and no artifacts may be generated inside the vault.
 
 ## Commands
 
@@ -39,6 +40,8 @@ maintenance report --project . --last 5             # recent run status
 `closeout` requires exactly one content-bearing source — `--git uncommitted`, `--since <git-ref>`, or `--change-manifest <path>`. Path-only changed-files are rejected; on a missing source, stop and handle `needs_input: changed_source`.
 
 Quick path: when `closeout` has no high-confidence `missing` or `stale` obligations, skip the subagent and run `verify` to close out.
+
+All run artifacts live under `<project>/.doc-maintenance/`, which the CLI creates with a self-ignoring `.gitignore` so Git never tracks it. Never commit run artifacts; with bundles older than v0.2.1, add `.doc-maintenance/` to the project's ignore rules yourself.
 
 ## Flow
 
