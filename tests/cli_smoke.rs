@@ -36,8 +36,19 @@ fn plain_closeout_has_no_ansi_and_requires_change_source() {
 
 #[test]
 fn route_plain_runs_without_banner() {
+    let project = std::env::temp_dir().join(format!(
+        "maintenance-smoke-route-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system clock")
+            .as_millis()
+    ));
+    std::fs::create_dir_all(&project).expect("create temp project");
     let output = maintenance()
-        .args(["route", "--project", ".", "--plain"])
+        .args(["route", "--project"])
+        .arg(&project)
+        .arg("--plain")
         .output()
         .expect("run maintenance route");
 
