@@ -12,6 +12,7 @@ pub(crate) struct PacketOutcome {
     pub(crate) subagent_prompt_path: PathBuf,
     pub(crate) manifest_path: PathBuf,
     pub(crate) pack_path: Option<PathBuf>,
+    pub(crate) warnings: Vec<String>,
 }
 
 pub(crate) fn write_route_packet(args: RouteArgs) -> Result<PacketOutcome, String> {
@@ -43,6 +44,11 @@ fn write_packet_files(
     let packet_path = out_dir.join("packet.md");
     let subagent_prompt_path = out_dir.join("subagent-prompt.md");
     let pack_path = pack_options.map(|_| out_dir.join("pack.md"));
+    let warnings = manifest
+        .input_warnings
+        .iter()
+        .map(|warning| warning.render())
+        .collect();
 
     write_text(&manifest_path, &render_manifest(&manifest)?)?;
     write_text(
@@ -59,6 +65,7 @@ fn write_packet_files(
         subagent_prompt_path,
         manifest_path,
         pack_path,
+        warnings,
     })
 }
 
@@ -82,6 +89,12 @@ fn render_packet(manifest: &Manifest, subagent_prompt_path: &std::path::Path) ->
         "- Topics: {}\n",
         list_or_none(&manifest.inputs.topic)
     ));
+    if !manifest.input_warnings.is_empty() {
+        out.push_str("\n## Input Warnings\n\n");
+        for warning in &manifest.input_warnings {
+            out.push_str(&format!("- {}\n", warning.render()));
+        }
+    }
     out.push_str("\n## Hard Rules\n\n");
     for rule in &manifest.rules {
         out.push_str(&format!("- {rule}\n"));

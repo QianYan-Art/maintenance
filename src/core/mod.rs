@@ -30,8 +30,42 @@ pub(crate) struct Manifest {
     pub(crate) inputs: ManifestInputs,
     pub(crate) candidates: Vec<DocumentCandidate>,
     pub(crate) rules: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) input_warnings: Vec<InputWarning>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) closeout: Option<closeout::CloseoutManifest>,
+}
+
+/// A problem with an explicit document input that would otherwise be silent,
+/// e.g. a record doc that does not exist yet or a topic that filtered out
+/// every record doc.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct InputWarning {
+    pub(crate) kind: InputWarningKind,
+    pub(crate) path: String,
+    pub(crate) message: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum InputWarningKind {
+    MissingPath,
+    NoRecordDocs,
+}
+
+impl InputWarning {
+    pub(crate) fn render(&self) -> String {
+        format!("{}: `{}` — {}", self.kind.as_str(), self.path, self.message)
+    }
+}
+
+impl InputWarningKind {
+    pub(crate) fn as_str(&self) -> &'static str {
+        match self {
+            Self::MissingPath => "missing_path",
+            Self::NoRecordDocs => "no_record_docs",
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -78,20 +112,33 @@ impl RouteArgs {
         let summary_inputs = resolve_inputs(&project, &self.summary_source);
 
         let mut candidates = Vec::new();
+        let mut input_warnings = Vec::new();
         collect_candidates(
             &project,
             &dev_inputs,
             DocumentLane::CurrentDevDocs,
             &[],
             &mut candidates,
+            &mut input_warnings,
         )?;
-        collect_candidates(
+        let topic_filtered = collect_candidates(
             &project,
             &record_inputs,
             DocumentLane::RecordDocs,
             &self.topic,
             &mut candidates,
+            &mut input_warnings,
         )?;
+        let has_record_candidate = candidates
+            .iter()
+            .any(|candidate| candidate.lane == DocumentLane::RecordDocs);
+        if !record_inputs.is_empty() && !has_record_candidate {
+            input_warnings.push(InputWarning {
+                kind: InputWarningKind::NoRecordDocs,
+                path: display_paths(&record_inputs).join(", "),
+                message: no_record_docs_message(topic_filtered, &self.topic),
+            });
+        }
 
         Ok(Manifest {
             schema_version: 1,
@@ -110,8 +157,20 @@ impl RouteArgs {
                 "record docs are processed only when explicitly passed".to_string(),
                 "any path segment named archived is listed as Archived Records only".to_string(),
             ],
+            input_warnings,
             closeout: None,
         })
+    }
+}
+
+fn no_record_docs_message(topic_filtered: usize, topics: &[String]) -> String {
+    if topic_filtered > 0 {
+        format!(
+            "record docs were given but none became a candidate; {topic_filtered} document(s) were filtered out by topic {}; loosen --topic or name the file directly",
+            topics.join(" / ")
+        )
+    } else {
+        "record docs were given but none became a candidate; check that the paths exist and point to .md/.mdx/.txt/.rst files".to_string()
     }
 }
 
@@ -197,17 +256,40 @@ pub(crate) fn resolve_inputs(project: &Path, inputs: &[PathBuf]) -> Vec<PathBuf>
         .collect()
 }
 
+/// Collects candidates for one lane and returns how many documents the topic
+/// filter skipped. Explicitly named files are never topic-filtered; the topic
+/// only narrows what a directory expands to.
 fn collect_candidates(
     project: &Path,
     inputs: &[PathBuf],
     lane: DocumentLane,
     topics: &[String],
     candidates: &mut Vec<DocumentCandidate>,
-) -> Result<(), String> {
+    warnings: &mut Vec<InputWarning>,
+) -> Result<usize, String> {
+    let mut topic_filtered = 0;
     for input in inputs {
-        collect_one(project, input, lane.clone(), topics, candidates)?;
+        if !input.exists() {
+            warnings.push(InputWarning {
+                kind: InputWarningKind::MissingPath,
+                path: display_path(input),
+                message: format!(
+                    "explicit {} path does not exist; create the document first (or fix the path) and rerun",
+                    lane.title()
+                ),
+            });
+            continue;
+        }
+        collect_one(
+            project,
+            input,
+            lane.clone(),
+            topics,
+            candidates,
+            &mut topic_filtered,
+        )?;
     }
-    Ok(())
+    Ok(topic_filtered)
 }
 
 fn collect_one(
@@ -216,6 +298,7 @@ fn collect_one(
     lane: DocumentLane,
     topics: &[String],
     candidates: &mut Vec<DocumentCandidate>,
+    topic_filtered: &mut usize,
 ) -> Result<(), String> {
     if is_archived(path) {
         push_candidate(
@@ -230,7 +313,7 @@ fn collect_one(
     }
 
     if path.is_file() {
-        if include_for_topic(path, topics) && looks_like_doc(path) {
+        if looks_like_doc(path) {
             push_candidate(
                 project,
                 path,
@@ -271,9 +354,19 @@ fn collect_one(
                         candidates,
                     );
                 }
-                collect_one(project, &child, lane.clone(), topics, candidates)?;
-            } else if child.is_file() && looks_like_doc(&child) && include_for_topic(&child, topics)
-            {
+                collect_one(
+                    project,
+                    &child,
+                    lane.clone(),
+                    topics,
+                    candidates,
+                    topic_filtered,
+                )?;
+            } else if child.is_file() && looks_like_doc(&child) {
+                if !include_for_topic(&child, topics) {
+                    *topic_filtered += 1;
+                    continue;
+                }
                 let reason = match lane {
                     DocumentLane::CurrentDevDocs => "default or explicit development doc",
                     DocumentLane::RecordDocs => {
@@ -336,19 +429,34 @@ pub(crate) fn looks_like_doc(path: &Path) -> bool {
     )
 }
 
+/// A path passes the topic filter when its file name contains any topic term.
+/// Each `--topic` value is split on whitespace and commas (ASCII or
+/// full-width), so `"SafetyRAISE release"` matches a name containing either
+/// word. Matching is case-insensitive for all scripts.
 fn include_for_topic(path: &Path, topics: &[String]) -> bool {
-    if topics.is_empty() {
+    let terms = topic_terms(topics);
+    if terms.is_empty() {
         return true;
     }
     let haystack = path
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or_default()
-        .to_ascii_lowercase();
+        .to_lowercase();
+    terms.iter().any(|term| haystack.contains(term.as_str()))
+}
+
+fn topic_terms(topics: &[String]) -> Vec<String> {
     topics
         .iter()
-        .map(|topic| topic.to_ascii_lowercase())
-        .any(|topic| haystack.contains(&topic))
+        .flat_map(|topic| {
+            topic
+                .split(|c: char| c.is_whitespace() || matches!(c, ',' | '，' | '、'))
+                .map(str::to_lowercase)
+                .collect::<Vec<_>>()
+        })
+        .filter(|term| !term.is_empty())
+        .collect()
 }
 
 fn is_archived(path: &Path) -> bool {

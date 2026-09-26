@@ -165,6 +165,9 @@ fn main() -> ExitCode {
                     StatusKind::Ok,
                     &format!("manifest: {}", outcome.manifest_path.display()),
                 );
+                for warning in &outcome.warnings {
+                    output.status(StatusKind::Warn, warning);
+                }
                 ExitCode::SUCCESS
             }
             Err(error) => {
@@ -212,6 +215,9 @@ fn main() -> ExitCode {
                     );
                     if let Some(pack_path) = outcome.pack_path {
                         output.status(StatusKind::Ok, &format!("pack: {}", pack_path.display()));
+                    }
+                    for warning in &outcome.warnings {
+                        output.status(StatusKind::Warn, warning);
                     }
                     ExitCode::SUCCESS
                 }
