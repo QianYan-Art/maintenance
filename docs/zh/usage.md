@@ -18,6 +18,8 @@
 - 命令行 `--dev-docs`、`--record-docs`、`--summary-source`、`--topic` 优先于配置。
 - 未传 `--dev-docs` 时自动发现存在的 `README.md` 和 `docs/`。
 - `--record-docs` 无默认值；记录文档必须人工点名。
+- 直接点名的记录文档文件总是候选，不受 `--topic` 影响。`--topic` 只筛选记录文档目录展开出的文件：每个 topic 值按空白和逗号（含全角 `，`、`、`）拆成多个词，文件名包含任一词即通过，不区分大小写。
+- 显式路径不存在，或传了记录文档却没有任何候选时，`manifest.json` 写入 `input_warnings`（`missing_path` / `no_record_docs`），packet 显示 `Input Warnings` 一节，终端同步打印告警。新建的记录文档要先创建再跑 `closeout`。
 - 路径任一段等于 `archived` 时只列、不读、不改。
 - `--plain` 与 `--no-banner` 去除终端装饰；agent 或脚本消费输出时用 `--plain`。
 - `--project` 必须是已存在的目录 —— 只能是工作项目本身，绝不能指向记录文档库。

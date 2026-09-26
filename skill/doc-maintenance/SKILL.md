@@ -39,6 +39,8 @@ maintenance report --project . --last 5             # recent run status
 
 `closeout` requires exactly one content-bearing source — `--git uncommitted`, `--since <git-ref>`, or `--change-manifest <path>`. Path-only changed-files are rejected; on a missing source, stop and handle `needs_input: changed_source`.
 
+Record docs: create a new record doc before running `closeout` — a path that does not exist is never a candidate. If the packet shows `Input Warnings` (`missing_path` / `no_record_docs`), fix the path or loosen `--topic` and re-run; a named file is never filtered by `--topic`.
+
 Quick path: when `closeout` has no high-confidence `missing` or `stale` obligations, skip the subagent and run `verify` to close out.
 
 All run artifacts live under `<project>/.doc-maintenance/`, which the CLI creates with a self-ignoring `.gitignore` so Git never tracks it. Never commit run artifacts; with bundles older than v0.2.1, add `.doc-maintenance/` to the project's ignore rules yourself.

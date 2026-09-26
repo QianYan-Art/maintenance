@@ -18,6 +18,8 @@
 - Explicit `--dev-docs`, `--record-docs`, `--summary-source`, `--topic` override the config.
 - With no `--dev-docs`, the tool discovers `README.md` and `docs/` if present.
 - `--record-docs` has no default; record docs are opt-in.
+- A record doc named as a file is always a candidate. `--topic` only filters the files found by expanding a record-docs directory: each topic value is split on whitespace and commas (including full-width `，` and `、`), and a file whose name contains any term passes, case-insensitively.
+- When an explicit path does not exist, or record docs were given but none became a candidate, `manifest.json` records `input_warnings` (`missing_path` / `no_record_docs`), the packet shows an `Input Warnings` section, and the terminal prints the same warnings. Create a new record doc before running `closeout`.
 - Any path segment equal to `archived` is listed only — never read or edited.
 - `--plain` and `--no-banner` strip terminal decoration; use `--plain` when an agent or script consumes the output.
 - `--project` must be an existing directory — the working project itself, never the record-docs vault.

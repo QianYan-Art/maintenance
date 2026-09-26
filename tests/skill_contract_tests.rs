@@ -28,6 +28,8 @@ fn skill_contract_contains_required_workflow_rules() {
         "verify",
         "--pack --max-lines 200",
         "never inlines document bodies",
+        "create a new record doc before running `closeout`",
+        "Input Warnings",
     ] {
         assert!(
             skill.contains(required),
@@ -63,6 +65,8 @@ fn sync_installed_skills_script_is_manual_and_env_safe() {
         ".claude\\skills\\doc-maintenance",
         "skill\\doc-maintenance",
         "Copy-Item",
+        "LinkType",
+        "adapter install without bin/",
     ] {
         assert!(
             script.contains(required),
