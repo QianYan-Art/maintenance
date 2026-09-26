@@ -46,7 +46,7 @@ The agent loads it from the `SKILL.md` front matter and runs it when docs need u
 maintenance init --project .                        # write local config
 maintenance route --project .                       # reading route on handoff
 maintenance closeout --project . --git uncommitted  # closeout after changes
-maintenance waive --project . TOKEN --reason "why"  # auditable token waiver
+maintenance waive --project . TOKEN --reason "why"  # auditable waiver (latest run by default)
 maintenance verify --project .                      # confirm the edits closed the loop
 maintenance report --project . --last 5             # recent run status
 ```
@@ -62,8 +62,11 @@ For the `change-manifest` format, config fields, and the pack fallback, see [doc
 - `--git uncommitted`
 - `--since <git-ref>`
 - `--change-manifest <path>`
+- `--compare <before> <after>` (a file pair, e.g. a backup and the edited file)
 
 Path-only file lists are intentionally unsupported: without line content there is no way to extract tokens or catch stale docs.
+
+Stale tokens block `verify` only in development docs; in record docs they are reported as advisory, because history may name what was removed.
 
 ## What it won't do
 

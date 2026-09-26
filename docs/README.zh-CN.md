@@ -46,7 +46,7 @@ agent 会从 `SKILL.md` 的 front matter 加载它，并在改动后需要更新
 maintenance init --project .                        # 写入本地配置
 maintenance route --project .                       # 接手时的读取路线
 maintenance closeout --project . --git uncommitted  # 改动后的收尾
-maintenance waive --project . TOKEN --reason "原因"  # 可审计的 token 豁免
+maintenance waive --project . TOKEN --reason "原因"  # 可审计的豁免（默认仅限最近一次 run）
 maintenance verify --project .                      # 确认编辑闭环
 maintenance report --project . --last 5             # 最近 run 状态
 ```
@@ -60,8 +60,11 @@ maintenance report --project . --last 5             # 最近 run 状态
 - `--git uncommitted`
 - `--since <git-ref>`
 - `--change-manifest <path>`
+- `--compare <改前> <改后>`（一对文件，例如备份与修改后的文件）
 
 故意不支持纯路径文件列表：没有行内容就无法提取 token、也无法发现过期文档。
+
+过时 token 只在开发文档中阻断 `verify`；记录文档里的只作提示，因为历史记录可以写出已删除的内容。
 
 ## 它不会做什么
 

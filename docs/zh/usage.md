@@ -33,9 +33,12 @@
 maintenance closeout --project . --git uncommitted
 maintenance closeout --project . --since HEAD~1
 maintenance closeout --project . --change-manifest ./change.json
+maintenance closeout --project . --compare ./backup/app.toml.bak ./app.toml
 ```
 
-`change-manifest` 最小 JSON：
+`--compare <改前> <改后>` 直接对比一对文件（通常是备份与修改后的文件），适合 Git 之外的改动，可重复传入多对。只在改后文件出现的行算新增、只在改前文件出现的行算删除（仅调整顺序不算改动），改动文件按改后路径记录。改前文件不存在表示新建，改后文件不存在表示删除。
+
+`change-manifest` 最小 JSON（`maintenance closeout --help` 里也有）：
 
 ```json
 {
@@ -59,15 +62,34 @@ maintenance closeout --project . --git uncommitted --pack --max-lines 200
 
 `pack.md` 只含候选路径、token、命中行与少量上下文，受 `--max-lines` 限制，不是长期事实源。
 
+## 阅读 packet
+
+- 同一 token 在同一文档里的多次命中合并为一行并列出行号，例如 `update` `--verbose` at `README.md` lines 1, 2, 3；`manifest.json` 仍保留每一处命中。
+- `New tokens` 拆成 `already documented`（已有候选文档提到）和 `not yet documented`（即 `missing` 义务）两组。
+- 记录文档里的过时命中标为 `stale (advisory)`。
+
+## verify 语义
+
+- 删除的 token 仍出现在**开发文档**中，记为 `stale_remaining`，`verify` 失败。
+- 删除的 token 仍出现在**记录文档**中，记为 `stale_advisory`：会打印并写入 `outcome.json`，但 `verify` 仍通过。记录文档是历史，“旧键已删除”这类说明必须允许写出旧键。
+- `missing` token 必须出现在目标文档（或任一候选文档）中，`verify` 才通过。
+
 ## 豁免与运行报表
 
-提取出的 token 带置信度：有使用证据的 token（env 访问模式、`.env` 赋值、compose `environment` 键、flag、config key）为高置信，产生 `missing`/`stale` 义务；裸大写词只进低置信参考区。高置信 token 仍是噪声时，用豁免代替往文档里硬塞：
+提取出的 token 带置信度：有使用证据的 token（env 访问模式、`.env` 赋值、compose `environment` 键、flag、config key）为高置信，产生 `missing`/`stale` 义务；裸大写词只进低置信参考区。从测试或 fixture 路径（`tests/`、`test/`、`__tests__/`、`spec/`、`fixtures/`、`testdata/`，或 `*_test.*`、`*.test.*`、`*.spec.*`、`test_*` 这类文件名）提取的 token 一律为低置信，证据记为 `path:test`，因为测试里的 flag 和键是输入，不是用户可见的接口。
+
+高置信 token 仍是噪声时，用豁免代替往文档里硬塞：
 
 ```sh
 maintenance waive --project . SOME_TOKEN --reason "生成的常量，非用户可见"
+maintenance waive --project . SOME_TOKEN --reason "内部键" --scope project --expires 2026-12-31
 ```
 
-豁免连同理由与日期写入 `.doc-maintenance/waivers.toml`；`closeout` 与 `verify` 跳过已豁免 token，并在 manifest 记录为 `ignored_tokens`。绝不为了让 `verify` 通过而添加无信息量的 token 提及。
+- `--scope run`（默认）把豁免绑定到最近一次 closeout run，只影响该 run 的 `verify`；需要已有 closeout run。
+- `--scope project` 对所有 run 生效。建议加 `--expires YYYY-MM-DD`（含当天），到期自动失效，避免永久掩盖 token。
+- 旧版本写入的条目没有 `scope`，继续按项目级豁免生效。
+
+豁免连同理由、日期、作用域、run id 与到期日写入 `.doc-maintenance/waivers.toml`；`closeout` 与 `verify` 跳过生效中的豁免 token，并在 manifest 记录为 `ignored_tokens`。绝不为了让 `verify` 通过而添加无信息量的 token 提及。
 
 `verify` 会把 `outcome.json` 写进对应 run 目录。汇总最近的 run：
 
@@ -75,7 +97,7 @@ maintenance waive --project . SOME_TOKEN --reason "生成的常量，非用户�
 maintenance report --project . --last 5
 ```
 
-每行显示 run id、改动来源、改动文件数、高/低置信 token 数、豁免与缺失数，以及 verify 结果（`passed` / `failed` / `unverified`）。
+每行显示 run id、改动来源、改动文件数、高/低置信 token 数、豁免与缺失数、输入告警数、过时提示数，以及 verify 结果（`passed` / `failed` / `unverified`）。`maintenance --version` 输出 CLI 版本。
 
 ## 安装到 skill 包
 

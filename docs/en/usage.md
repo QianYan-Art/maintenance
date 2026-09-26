@@ -33,9 +33,12 @@
 maintenance closeout --project . --git uncommitted
 maintenance closeout --project . --since HEAD~1
 maintenance closeout --project . --change-manifest ./change.json
+maintenance closeout --project . --compare ./backup/app.toml.bak ./app.toml
 ```
 
-Minimal `change-manifest`:
+`--compare <BEFORE> <AFTER>` diffs a file pair — typically a backup and the edited file — for work outside Git; repeat it for several files. Lines only in `AFTER` count as added and lines only in `BEFORE` as removed (reordering alone is no change), and the changed file is reported under the `AFTER` path. A missing `BEFORE` means a new file; a missing `AFTER` means a deleted one.
+
+Minimal `change-manifest` (also shown by `maintenance closeout --help`):
 
 ```json
 {
@@ -59,15 +62,34 @@ maintenance closeout --project . --git uncommitted --pack --max-lines 200
 
 `pack.md` contains candidate paths, tokens, hit lines, and a little context, bounded by `--max-lines`. It is not a long-term source of truth.
 
+## Reading the packet
+
+- Repeated hits of one token in one document collapse into a single line with a line list, e.g. `update` `--verbose` at `README.md` lines 1, 2, 3; `manifest.json` keeps every hit.
+- `New tokens` is split into `already documented` (some candidate doc already mentions it) and `not yet documented` (the `missing` obligations).
+- A stale hit inside a record doc is labelled `stale (advisory)`.
+
+## Verify semantics
+
+- A removed token that still appears in a **development doc** is `stale_remaining` and fails `verify`.
+- A removed token that still appears in a **record doc** is `stale_advisory`: printed and written to `outcome.json`, but `verify` still passes. Record docs are history; a note such as "the old key was removed" must be allowed to name the old key.
+- A `missing` token must appear in its target doc (or any candidate doc) for `verify` to pass.
+
 ## Waivers and reporting
 
-Extracted tokens carry a confidence level: tokens with usage evidence (env access patterns, `.env` assignments, compose `environment` keys, flags, config keys) are high confidence and create `missing`/`stale` obligations; bare uppercase words are listed as low-confidence reference only. When a high-confidence token is still noise, waive it instead of padding the docs:
+Extracted tokens carry a confidence level: tokens with usage evidence (env access patterns, `.env` assignments, compose `environment` keys, flags, config keys) are high confidence and create `missing`/`stale` obligations; bare uppercase words are listed as low-confidence reference only. Every token extracted from a test or fixture path (`tests/`, `test/`, `__tests__/`, `spec/`, `fixtures/`, `testdata/`, or names like `*_test.*`, `*.test.*`, `*.spec.*`, `test_*`) is low confidence with evidence `path:test`, because tests mention flags and keys as inputs rather than as user-facing surface.
+
+When a high-confidence token is still noise, waive it instead of padding the docs:
 
 ```sh
 maintenance waive --project . SOME_TOKEN --reason "generated constant, not user-facing"
+maintenance waive --project . SOME_TOKEN --reason "internal key" --scope project --expires 2026-12-31
 ```
 
-Waivers land in `.doc-maintenance/waivers.toml` with the reason and date; `closeout` and `verify` skip waived tokens and record them as `ignored_tokens` in the manifest. Never add an information-free token mention just to make `verify` pass.
+- `--scope run` (the default) binds the waiver to the latest closeout run, so it only affects `verify` for that run; it needs an existing closeout run.
+- `--scope project` applies to every run. Add `--expires YYYY-MM-DD` (inclusive) so it lapses instead of hiding a token forever.
+- Entries written by older versions have no `scope` and keep working as project-wide waivers.
+
+Waivers land in `.doc-maintenance/waivers.toml` with the reason, date, scope, run id, and expiry; `closeout` and `verify` skip active waived tokens and record them as `ignored_tokens` in the manifest. Never add an information-free token mention just to make `verify` pass.
 
 `verify` writes an `outcome.json` into the run directory. Summarize recent runs with:
 
@@ -75,7 +97,7 @@ Waivers land in `.doc-maintenance/waivers.toml` with the reason and date; `close
 maintenance report --project . --last 5
 ```
 
-Each line shows the run id, change source, changed-file count, high/low token counts, waived and missing counts, and the verify result (`passed` / `failed` / `unverified`).
+Each line shows the run id, change source, changed-file count, high/low token counts, waived and missing counts, input warnings, stale advisories, and the verify result (`passed` / `failed` / `unverified`). `maintenance --version` prints the CLI version.
 
 ## Install into a skill package
 

@@ -32,12 +32,12 @@ Call it by the resolved path, e.g. `<path> closeout --project . --git uncommitte
 maintenance init --project .                        # write local config (won't overwrite)
 maintenance route --project .                       # reading route on handoff
 maintenance closeout --project . --git uncommitted  # closeout after a change
-maintenance waive --project . TOKEN --reason "why"  # auditable token waiver
+maintenance waive --project . TOKEN --reason "why"  # auditable waiver, latest run only (--scope project [--expires YYYY-MM-DD] for project-wide)
 maintenance verify --project .                      # confirm the edits closed the loop
 maintenance report --project . --last 5             # recent run status
 ```
 
-`closeout` requires exactly one content-bearing source — `--git uncommitted`, `--since <git-ref>`, or `--change-manifest <path>`. Path-only changed-files are rejected; on a missing source, stop and handle `needs_input: changed_source`.
+`closeout` requires exactly one content-bearing source — `--git uncommitted`, `--since <git-ref>`, `--change-manifest <path>`, or `--compare <before> <after>` (a file pair such as a backup and the edited file, for work outside Git). Path-only changed-files are rejected; on a missing source, stop and handle `needs_input: changed_source`.
 
 Record docs: create a new record doc before running `closeout` — a path that does not exist is never a candidate. If the packet shows `Input Warnings` (`missing_path` / `no_record_docs`), fix the path or loosen `--topic` and re-run; a named file is never filtered by `--topic`.
 
@@ -50,7 +50,7 @@ All run artifacts live under `<project>/.doc-maintenance/`, which the CLI create
 1. Run `closeout`. The packet lists candidate paths and hit reasons only — it never inlines document bodies; `manifest.json` is the single source of truth.
 2. Hand `subagent-prompt.md` to a read-only subagent. It edits nothing and returns `path:line` evidence in three kinds: `stale` (now outdated), `update` (needs change), `missing` (needs adding) — each with the matched token.
 3. Read only those lines and edit the dev docs (or explicitly named record docs). `--record-docs` has no default; record docs are touched only when named.
-4. Run `verify`; if any `stale` or `missing` remain, fix and re-run.
+4. Run `verify`; if any `stale` or `missing` remain, fix and re-run. `stale_advisory` lines point at record docs: they do not fail `verify`, and history that names a removed token may stay as it is.
 
 ## Fallback
 
