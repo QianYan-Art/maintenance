@@ -40,6 +40,18 @@ foreach ($target in $targets) {
         Write-Host "Skipped $target (same physical skills directory already synced)"
         continue
     }
+    # A skill directory that is itself a link, or an existing install without
+    # bin/, is an adapter managed elsewhere (e.g. a host-specific SKILL.md that
+    # calls another install's binary); never overwrite it.
+    $targetItem = Get-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
+    if ($null -ne $targetItem -and $targetItem.LinkType) {
+        Write-Host "Skipped $target (linked adapter -> $($targetItem.LinkTarget))"
+        continue
+    }
+    if ($null -ne $targetItem -and -not (Test-Path -LiteralPath (Join-Path $target "bin"))) {
+        Write-Host "Skipped $target (adapter install without bin/)"
+        continue
+    }
     New-Item -ItemType Directory -Force -Path $target | Out-Null
     Get-ChildItem -LiteralPath $sourceDir | ForEach-Object {
         Copy-Item -LiteralPath $_.FullName -Destination $target -Recurse -Force
