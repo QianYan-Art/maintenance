@@ -11,12 +11,12 @@ use core::closeout::{CloseoutArgs as CoreCloseoutArgs, CloseoutError};
 use core::config::{init_project_config, load_project_config};
 use core::diff::ChangeSourceRequest;
 use core::report::report_project;
-use core::waivers::add_waiver;
+use core::waivers::{add_waiver, WaiveRequest, WaiverScope};
 use core::RouteArgs;
 use terminal::{OutputMode, StatusKind};
 
 #[derive(Debug, Parser)]
-#[command(name = "maintenance")]
+#[command(name = "maintenance", version)]
 #[command(about = "Generate agent-readable document maintenance packets")]
 #[command(subcommand_required = true)]
 struct Cli {
@@ -86,8 +86,22 @@ struct CloseoutArgs {
     #[arg(long)]
     since: Option<String>,
 
-    #[arg(long = "change-manifest")]
+    #[arg(
+        long = "change-manifest",
+        value_name = "JSON",
+        help = "JSON change set for non-Git work (see --help for the format)",
+        long_help = "JSON change set for non-Git work. Minimal format:\n{\n  \"files\": [\n    {\n      \"path\": \"config/app.toml\",\n      \"removed\": [\"old_key = 1\"],\n      \"added\": [\"new_key = 1\"]\n    }\n  ]\n}\nRelative paths resolve against --project."
+    )]
     change_manifest: Option<PathBuf>,
+
+    #[arg(
+        long,
+        num_args = 2,
+        value_names = ["BEFORE", "AFTER"],
+        action = clap::ArgAction::Append,
+        help = "Diff a before/after file pair (repeatable), e.g. a backup and the edited file"
+    )]
+    compare: Vec<PathBuf>,
 
     #[arg(long)]
     pack: bool,
@@ -120,6 +134,21 @@ struct WaiveArgs {
 
     #[arg(long)]
     reason: String,
+
+    #[arg(
+        long,
+        default_value = "run",
+        value_parser = ["run", "project"],
+        help = "run: only the latest closeout run (default); project: every run until --expires"
+    )]
+    scope: String,
+
+    #[arg(
+        long,
+        value_name = "YYYY-MM-DD",
+        help = "Last day the waiver applies (inclusive)"
+    )]
+    expires: Option<String>,
 }
 
 fn main() -> ExitCode {
@@ -234,10 +263,16 @@ fn main() -> ExitCode {
         Command::Verify(args) => match core::verify::verify_project(&args.project) {
             Ok(report) if report.is_ok() => {
                 output.status(StatusKind::Ok, "verify passed");
+                for advisory in &report.stale_advisory {
+                    output.status(StatusKind::Warn, &format!("stale_advisory: {advisory}"));
+                }
                 ExitCode::SUCCESS
             }
             Ok(report) => {
                 println!("verify_failed");
+                for advisory in &report.stale_advisory {
+                    println!("stale_advisory: {advisory}");
+                }
                 for token in report.stale_remaining {
                     println!("stale_remaining: {token}");
                 }
@@ -255,7 +290,7 @@ fn main() -> ExitCode {
             Ok(reports) => {
                 for report in reports {
                     println!(
-                        "run={} source={} changed={} high={} low={} waived={} missing={} verify={}",
+                        "run={} source={} changed={} high={} low={} waived={} missing={} warnings={} advisory={} verify={}",
                         report.run_id,
                         report.source,
                         report.changed_files,
@@ -263,6 +298,8 @@ fn main() -> ExitCode {
                         report.low_tokens,
                         report.waived_tokens,
                         report.missing_tokens,
+                        report.input_warnings,
+                        report.stale_advisory,
                         report.verify_result
                     );
                 }
@@ -273,11 +310,26 @@ fn main() -> ExitCode {
                 ExitCode::from(1)
             }
         },
-        Command::Waive(args) => match add_waiver(&args.project, &args.token, &args.reason) {
+        Command::Waive(args) => match WaiverScope::parse(&args.scope).and_then(|scope| {
+            add_waiver(
+                &args.project,
+                WaiveRequest {
+                    token: &args.token,
+                    reason: &args.reason,
+                    scope,
+                    expires: args.expires.as_deref(),
+                },
+            )
+        }) {
             Ok(outcome) if outcome.added => {
+                let scope = outcome
+                    .run
+                    .as_deref()
+                    .map(|run| format!("run {run}"))
+                    .unwrap_or_else(|| "project".to_string());
                 output.status(
                     StatusKind::Ok,
-                    &format!("waiver: {}", outcome.path.display()),
+                    &format!("waiver ({scope}): {}", outcome.path.display()),
                 );
                 ExitCode::SUCCESS
             }
@@ -318,6 +370,14 @@ fn prefer_cli<T>(cli: Vec<T>, configured: Vec<T>) -> Vec<T> {
 fn change_source(args: &CloseoutArgs) -> Option<ChangeSourceRequest> {
     if let Some(manifest) = &args.change_manifest {
         return Some(ChangeSourceRequest::ChangeManifest(manifest.clone()));
+    }
+    if !args.compare.is_empty() {
+        let pairs = args
+            .compare
+            .chunks(2)
+            .map(|pair| (pair[0].clone(), pair[1].clone()))
+            .collect();
+        return Some(ChangeSourceRequest::Compare(pairs));
     }
     if let Some(revision) = &args.since {
         return Some(ChangeSourceRequest::Since(revision.clone()));

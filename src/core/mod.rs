@@ -174,6 +174,45 @@ fn no_record_docs_message(topic_filtered: usize, topics: &[String]) -> String {
     }
 }
 
+/// The newest run directory whose manifest is a closeout manifest.
+pub(crate) fn latest_closeout_manifest(project: &Path) -> Result<Option<PathBuf>, String> {
+    let runs = project.join(".doc-maintenance").join("runs");
+    if !runs.is_dir() {
+        return Ok(None);
+    }
+    let mut manifests = Vec::new();
+    let entries = fs::read_dir(&runs)
+        .map_err(|error| format!("cannot read runs directory {}: {error}", runs.display()))?;
+    for entry in entries {
+        let entry = entry.map_err(|error| format!("cannot read runs entry: {error}"))?;
+        let manifest = entry.path().join("manifest.json");
+        if !manifest.exists() {
+            continue;
+        }
+        let text = fs::read_to_string(&manifest)
+            .map_err(|error| format!("cannot read {}: {error}", manifest.display()))?;
+        let manifest_json: Manifest = serde_json::from_str(&text)
+            .map_err(|error| format!("invalid manifest {}: {error}", manifest.display()))?;
+        if manifest_json.closeout.is_some() {
+            manifests.push(manifest);
+        }
+    }
+    manifests.sort();
+    Ok(manifests.pop())
+}
+
+pub(crate) fn latest_closeout_run_id(project: &Path) -> Result<Option<String>, String> {
+    Ok(latest_closeout_manifest(project)?.and_then(|manifest| run_id_of(&manifest)))
+}
+
+pub(crate) fn run_id_of(manifest_path: &Path) -> Option<String> {
+    manifest_path
+        .parent()
+        .and_then(|run| run.file_name())
+        .and_then(|name| name.to_str())
+        .map(str::to_string)
+}
+
 pub(crate) fn run_dir(project: &Path) -> PathBuf {
     let millis = SystemTime::now()
         .duration_since(UNIX_EPOCH)

@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use crate::core::closeout::{CloseoutArgs, CloseoutError, DocImpactSignal};
+use crate::core::closeout::{CloseoutArgs, CloseoutError, DocImpact, DocImpactSignal};
 use crate::core::{ensure_artifact_dir, run_dir, DocumentLane, Manifest, RouteArgs};
 
 mod pack;
@@ -121,6 +121,20 @@ fn render_packet(manifest: &Manifest, subagent_prompt_path: &std::path::Path) ->
             "- New tokens: {}\n",
             list_or_none(&closeout.new_tokens)
         ));
+        let documented = closeout
+            .new_tokens
+            .iter()
+            .filter(|token| !closeout.missing_tokens.contains(token))
+            .cloned()
+            .collect::<Vec<_>>();
+        out.push_str(&format!(
+            "  - already documented: {}\n",
+            list_or_none(&documented)
+        ));
+        out.push_str(&format!(
+            "  - not yet documented: {}\n",
+            list_or_none(&closeout.missing_tokens)
+        ));
         out.push_str(&format!(
             "- Removed tokens (stale signal): {}\n",
             list_or_none(&closeout.removed_tokens)
@@ -141,19 +155,8 @@ fn render_packet(manifest: &Manifest, subagent_prompt_path: &std::path::Path) ->
         if closeout.possible_doc_impact.is_empty() {
             out.push_str("- none\n");
         } else {
-            for impact in &closeout.possible_doc_impact {
-                let signal = match impact.signal {
-                    DocImpactSignal::Stale => "stale",
-                    DocImpactSignal::Update => "update",
-                };
-                out.push_str(&format!(
-                    "- `{}` `{}` at `{}:{}` ({})\n",
-                    signal,
-                    impact.token,
-                    impact.path,
-                    impact.line,
-                    impact.lane.title()
-                ));
+            for line in grouped_impacts(&closeout.possible_doc_impact) {
+                out.push_str(&format!("- {line}\n"));
             }
         }
     }
@@ -189,19 +192,8 @@ fn render_subagent_prompt(manifest: &Manifest) -> String {
         if closeout.possible_doc_impact.is_empty() {
             out.push_str("  - none\n");
         } else {
-            for impact in &closeout.possible_doc_impact {
-                let signal = match impact.signal {
-                    DocImpactSignal::Stale => "stale",
-                    DocImpactSignal::Update => "update",
-                };
-                out.push_str(&format!(
-                    "  - `{}` `{}` at `{}:{}` ({})\n",
-                    signal,
-                    impact.token,
-                    impact.path,
-                    impact.line,
-                    impact.lane.title()
-                ));
+            for line in grouped_impacts(&closeout.possible_doc_impact) {
+                out.push_str(&format!("  - {line}\n"));
             }
         }
         out.push('\n');
@@ -233,6 +225,53 @@ fn render_token_evidence(
             token.source_path
         ));
     }
+}
+
+/// One line per (signal, token, document): repeated hits in the same file
+/// collapse into a line list so large docs stay readable. Stale hits in record
+/// docs are labelled advisory because verify does not block on them.
+fn grouped_impacts(impacts: &[DocImpact]) -> Vec<String> {
+    let mut groups: Vec<(String, &str, &str, &DocumentLane, Vec<usize>)> = Vec::new();
+    for impact in impacts {
+        let signal = match (&impact.signal, &impact.lane) {
+            (DocImpactSignal::Stale, DocumentLane::RecordDocs) => "stale (advisory)",
+            (DocImpactSignal::Stale, _) => "stale",
+            (DocImpactSignal::Update, _) => "update",
+        };
+        match groups.iter_mut().find(|(existing, token, path, lane, _)| {
+            existing == signal
+                && *token == impact.token
+                && *path == impact.path
+                && **lane == impact.lane
+        }) {
+            Some(group) => group.4.push(impact.line),
+            None => groups.push((
+                signal.to_string(),
+                &impact.token,
+                &impact.path,
+                &impact.lane,
+                vec![impact.line],
+            )),
+        }
+    }
+    groups
+        .into_iter()
+        .map(|(signal, token, path, lane, lines)| {
+            let location = if lines.len() == 1 {
+                format!("`{path}:{}`", lines[0])
+            } else {
+                format!(
+                    "`{path}` lines {}",
+                    lines
+                        .iter()
+                        .map(usize::to_string)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            };
+            format!("`{signal}` `{token}` at {location} ({})", lane.title())
+        })
+        .collect()
 }
 
 fn render_lane(out: &mut String, manifest: &Manifest, lane: DocumentLane) {

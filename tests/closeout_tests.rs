@@ -213,6 +213,8 @@ fn waive_records_reason_and_filters_closeout_and_verify_tokens() {
             "APP_SECRET",
             "--reason",
             "runtime secret stays out of docs",
+            "--scope",
+            "project",
             "--plain",
         ])
         .output()
@@ -225,6 +227,8 @@ fn waive_records_reason_and_filters_closeout_and_verify_tokens() {
             "APP_SECRET",
             "--reason",
             "runtime secret stays out of docs",
+            "--scope",
+            "project",
             "--plain",
         ])
         .output()

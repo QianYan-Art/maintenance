@@ -30,6 +30,9 @@ fn skill_contract_contains_required_workflow_rules() {
         "never inlines document bodies",
         "create a new record doc before running `closeout`",
         "Input Warnings",
+        "--compare <before> <after>",
+        "stale_advisory",
+        "--scope project",
     ] {
         assert!(
             skill.contains(required),

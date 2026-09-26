@@ -8,7 +8,7 @@ use crate::core::diff::{load_change_set, ChangeSetError, ChangeSourceRequest};
 use crate::core::tokens::{
     RegexExtractor, TokenCategory, TokenConfidence, TokenExtractor, TokenMatch,
 };
-use crate::core::waivers::{load_waivers, WaiverFile};
+use crate::core::waivers::{load_waivers, ActiveWaivers};
 use crate::core::{
     display_path, normalize_project, DocumentCandidate, DocumentLane, Manifest, RouteArgs,
 };
@@ -99,7 +99,9 @@ impl CloseoutArgs {
         let extractor = RegexExtractor::new().map_err(CloseoutError::Other)?;
         let mut added_tokens = BTreeMap::new();
         let mut removed_tokens = BTreeMap::new();
-        let waivers = load_waivers(&project).map_err(CloseoutError::Other)?;
+        let waivers = load_waivers(&project)
+            .map_err(CloseoutError::Other)?
+            .active(None);
         for file in &change_set.files {
             merge_tokens(
                 &mut added_tokens,
@@ -176,7 +178,7 @@ impl CloseoutArgs {
                 .to_string(),
         );
         manifest.rules.push(
-            "verify checks stale tokens are absent and missing tokens are present".to_string(),
+            "verify checks stale tokens are absent from dev docs and missing tokens are present; stale tokens in record docs are advisory".to_string(),
         );
         Ok(manifest)
     }
@@ -373,7 +375,7 @@ fn token_observations(
 }
 
 fn ignored_tokens(
-    waivers: &WaiverFile,
+    waivers: &ActiveWaivers,
     added_tokens: &BTreeMap<String, TokenMatch>,
     removed_tokens: &BTreeMap<String, TokenMatch>,
 ) -> Vec<IgnoredToken> {

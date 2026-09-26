@@ -31,6 +31,8 @@ pub(crate) enum ChangeSourceRequest {
     GitUncommitted,
     Since(String),
     ChangeManifest(PathBuf),
+    /// Before/after file pairs, e.g. a backup and the edited file.
+    Compare(Vec<(PathBuf, PathBuf)>),
 }
 
 #[derive(Debug)]
@@ -53,7 +55,95 @@ pub(crate) fn load_change_set(
         ChangeSourceRequest::GitUncommitted => load_git_uncommitted(project),
         ChangeSourceRequest::Since(revision) => load_git_since(project, &revision),
         ChangeSourceRequest::ChangeManifest(path) => load_change_manifest(project, &path),
+        ChangeSourceRequest::Compare(pairs) => load_compare(project, &pairs),
     }
+}
+
+fn load_compare(project: &Path, pairs: &[(PathBuf, PathBuf)]) -> Result<ChangeSet, ChangeSetError> {
+    let resolve = |path: &Path| {
+        if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            project.join(path)
+        }
+    };
+    let mut files = Vec::new();
+    let mut details = Vec::new();
+    for (before, after) in pairs {
+        let before = resolve(before);
+        let after = resolve(after);
+        let before_text = read_optional(&before)?;
+        let after_text = read_optional(&after)?;
+        if before_text.is_none() && after_text.is_none() {
+            return Err(ChangeSetError::Other(format!(
+                "compare: neither {} nor {} exists",
+                before.display(),
+                after.display()
+            )));
+        }
+        let (added, removed) = line_delta(
+            before_text.as_deref().unwrap_or_default(),
+            after_text.as_deref().unwrap_or_default(),
+        );
+        let shown = after.strip_prefix(project).unwrap_or(&after);
+        files.push(ChangedFile {
+            path: crate::core::display_path(shown),
+            added,
+            removed,
+        });
+        details.push(format!(
+            "{} -> {}",
+            crate::core::display_path(&before),
+            crate::core::display_path(&after)
+        ));
+    }
+    Ok(ChangeSet {
+        source: ChangeSourceSummary {
+            kind: "compare".to_string(),
+            detail: details.join("; "),
+        },
+        files: merge_files(files),
+    })
+}
+
+fn read_optional(path: &Path) -> Result<Option<String>, ChangeSetError> {
+    if !path.exists() {
+        return Ok(None);
+    }
+    fs::read_to_string(path)
+        .map(Some)
+        .map_err(|error| ChangeSetError::Other(format!("cannot read {}: {error}", path.display())))
+}
+
+/// Lines only in `after` are added, lines only in `before` are removed,
+/// counted as multisets so reordering alone produces no change.
+fn line_delta(before: &str, after: &str) -> (Vec<String>, Vec<String>) {
+    let mut counts: BTreeMap<&str, i64> = BTreeMap::new();
+    for line in before.lines() {
+        *counts.entry(line).or_default() -= 1;
+    }
+    for line in after.lines() {
+        *counts.entry(line).or_default() += 1;
+    }
+    let mut added = Vec::new();
+    let mut removed = Vec::new();
+    for line in after.lines() {
+        if let Some(count) = counts.get_mut(line) {
+            if *count > 0 {
+                added.push(line.to_string());
+                *count -= 1;
+            }
+        }
+    }
+    for line in before.lines() {
+        if let Some(count) = counts.get_mut(line) {
+            if *count < 0 {
+                removed.push(line.to_string());
+                *count += 1;
+            }
+        }
+    }
+    (added, removed)
 }
 
 fn load_git_uncommitted(project: &Path) -> Result<ChangeSet, ChangeSetError> {

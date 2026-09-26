@@ -7,12 +7,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::closeout::DocImpactSignal;
 use crate::core::waivers::load_waivers;
-use crate::core::{normalize_project, Manifest};
+use crate::core::{latest_closeout_manifest, normalize_project, run_id_of, DocumentLane, Manifest};
 
 #[derive(Debug)]
 pub(crate) struct VerifyReport {
     pub(crate) stale_remaining: Vec<String>,
     pub(crate) missing_remaining: Vec<String>,
+    /// Removed tokens still mentioned in record docs. Record docs are history,
+    /// so these are reported but never fail verify.
+    pub(crate) stale_advisory: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -21,6 +24,8 @@ pub(crate) struct VerifyOutcome {
     pub(crate) result: String,
     pub(crate) stale_remaining: Vec<String>,
     pub(crate) missing_remaining: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) stale_advisory: Vec<String>,
 }
 
 impl VerifyReport {
@@ -32,8 +37,9 @@ impl VerifyReport {
 pub(crate) fn verify_project(project: &Path) -> Result<VerifyReport, String> {
     let project = normalize_project(project)?;
     crate::core::ensure_artifact_dir(&project)?;
-    let waivers = load_waivers(&project)?;
-    let manifest_path = latest_closeout_manifest(&project)?;
+    let manifest_path = latest_closeout_manifest(&project)?
+        .ok_or_else(|| "no closeout manifest found".to_string())?;
+    let waivers = load_waivers(&project)?.active(run_id_of(&manifest_path).as_deref());
     let run_dir = manifest_path
         .parent()
         .ok_or_else(|| format!("manifest has no run directory: {}", manifest_path.display()))?
@@ -59,17 +65,30 @@ pub(crate) fn verify_project(project: &Path) -> Result<VerifyReport, String> {
         .iter()
         .filter(|impact| impact.signal == DocImpactSignal::Stale)
         .filter(|impact| !waivers.contains(&impact.token))
-        .map(|impact| (impact.path.clone(), impact.token.clone()))
+        .map(|impact| {
+            (
+                impact.path.clone(),
+                impact.token.clone(),
+                impact.lane == DocumentLane::RecordDocs,
+            )
+        })
         .collect::<BTreeSet<_>>();
 
     let mut stale_remaining = BTreeSet::new();
-    for (path, token) in stale_impacts {
-        let doc = project.join(PathBuf::from(path));
-        if path_contains(&doc, &token) {
+    let mut stale_advisory = BTreeSet::new();
+    for (path, token, is_record) in stale_impacts {
+        let doc = project.join(PathBuf::from(&path));
+        if !path_contains(&doc, &token) {
+            continue;
+        }
+        if is_record {
+            stale_advisory.insert(format!("{token} ({path})"));
+        } else {
             stale_remaining.insert(token);
         }
     }
     let stale_remaining = stale_remaining.into_iter().collect::<Vec<_>>();
+    let stale_advisory = stale_advisory.into_iter().collect::<Vec<_>>();
 
     let mut missing_remaining = BTreeSet::new();
     let targeted_missing = closeout
@@ -100,34 +119,10 @@ pub(crate) fn verify_project(project: &Path) -> Result<VerifyReport, String> {
     let report = VerifyReport {
         stale_remaining,
         missing_remaining,
+        stale_advisory,
     };
     write_verify_outcome(&run_dir, &report)?;
     Ok(report)
-}
-
-fn latest_closeout_manifest(project: &Path) -> Result<PathBuf, String> {
-    let runs = project.join(".doc-maintenance").join("runs");
-    let mut manifests = Vec::new();
-    let entries = fs::read_dir(&runs)
-        .map_err(|error| format!("cannot read runs directory {}: {error}", runs.display()))?;
-    for entry in entries {
-        let entry = entry.map_err(|error| format!("cannot read runs entry: {error}"))?;
-        let manifest = entry.path().join("manifest.json");
-        if !manifest.exists() {
-            continue;
-        }
-        let text = fs::read_to_string(&manifest)
-            .map_err(|error| format!("cannot read {}: {error}", manifest.display()))?;
-        let manifest_json: Manifest = serde_json::from_str(&text)
-            .map_err(|error| format!("invalid manifest {}: {error}", manifest.display()))?;
-        if manifest_json.closeout.is_some() {
-            manifests.push(manifest);
-        }
-    }
-    manifests.sort();
-    manifests
-        .pop()
-        .ok_or_else(|| "no closeout manifest found".to_string())
 }
 
 fn docs_contain(docs: &[PathBuf], token: &str) -> bool {
@@ -162,6 +157,7 @@ fn write_verify_outcome(run_dir: &Path, report: &VerifyReport) -> Result<(), Str
         },
         stale_remaining: report.stale_remaining.clone(),
         missing_remaining: report.missing_remaining.clone(),
+        stale_advisory: report.stale_advisory.clone(),
     };
     let text = serde_json::to_string_pretty(&outcome)
         .map(|json| format!("{json}\n"))

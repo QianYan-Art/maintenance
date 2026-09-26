@@ -14,6 +14,8 @@ pub(crate) struct RunReport {
     pub(crate) low_tokens: usize,
     pub(crate) waived_tokens: usize,
     pub(crate) missing_tokens: usize,
+    pub(crate) input_warnings: usize,
+    pub(crate) stale_advisory: usize,
     pub(crate) verify_result: String,
 }
 
@@ -51,6 +53,8 @@ fn summarize_run(run_dir: &Path) -> Result<RunReport, String> {
             low_tokens: 0,
             waived_tokens: 0,
             missing_tokens: 0,
+            input_warnings: 0,
+            stale_advisory: 0,
             verify_result: "incomplete".to_string(),
         });
     }
@@ -58,6 +62,8 @@ fn summarize_run(run_dir: &Path) -> Result<RunReport, String> {
         .map_err(|error| format!("cannot read {}: {error}", manifest_path.display()))?;
     let manifest: Manifest = serde_json::from_str(&manifest_text)
         .map_err(|error| format!("invalid manifest {}: {error}", manifest_path.display()))?;
+    let input_warnings = manifest.input_warnings.len();
+    let (verify_result, stale_advisory) = verify_result(run_dir)?;
     let Some(closeout) = manifest.closeout else {
         return Ok(RunReport {
             run_id,
@@ -67,7 +73,9 @@ fn summarize_run(run_dir: &Path) -> Result<RunReport, String> {
             low_tokens: 0,
             waived_tokens: 0,
             missing_tokens: 0,
-            verify_result: verify_result(run_dir)?,
+            input_warnings,
+            stale_advisory,
+            verify_result,
         });
     };
     let high_tokens = closeout
@@ -85,18 +93,20 @@ fn summarize_run(run_dir: &Path) -> Result<RunReport, String> {
         low_tokens: closeout.low_confidence_tokens.len(),
         waived_tokens: closeout.ignored_tokens.len(),
         missing_tokens: closeout.missing_tokens.len(),
-        verify_result: verify_result(run_dir)?,
+        input_warnings,
+        stale_advisory,
+        verify_result,
     })
 }
 
-fn verify_result(run_dir: &Path) -> Result<String, String> {
+fn verify_result(run_dir: &Path) -> Result<(String, usize), String> {
     let path = run_dir.join("outcome.json");
     if !path.exists() {
-        return Ok("unverified".to_string());
+        return Ok(("unverified".to_string(), 0));
     }
     let text = fs::read_to_string(&path)
         .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
     let outcome: VerifyOutcome = serde_json::from_str(&text)
         .map_err(|error| format!("invalid {}: {error}", path.display()))?;
-    Ok(outcome.result)
+    Ok((outcome.result, outcome.stale_advisory.len()))
 }

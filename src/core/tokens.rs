@@ -202,8 +202,41 @@ impl TokenExtractor for RegexExtractor {
     }
 
     fn extract_for_path(&self, path: &str, lines: &[String]) -> BTreeMap<String, TokenMatch> {
-        self.extract_lines(path, lines, is_config_path(path))
+        let mut tokens = self.extract_lines(path, lines, is_config_path(path));
+        if is_test_path(path) {
+            // Tests and fixtures mention flags, env names and keys as inputs,
+            // not as user-facing surface, so they never create obligations.
+            for matched in tokens.values_mut() {
+                matched.confidence = TokenConfidence::Low;
+                matched.evidence = "path:test".to_string();
+            }
+        }
+        tokens
     }
+}
+
+/// Paths under test or fixture directories, or files named like tests.
+pub(crate) fn is_test_path(path: &str) -> bool {
+    let normalized = path.replace('\\', "/").to_ascii_lowercase();
+    let segments = normalized.split('/').collect::<Vec<_>>();
+    let Some((file_name, dirs)) = segments.split_last() else {
+        return false;
+    };
+    if dirs.iter().any(|segment| {
+        matches!(
+            *segment,
+            "test" | "tests" | "__tests__" | "spec" | "specs" | "fixtures" | "testdata"
+        )
+    }) {
+        return true;
+    }
+    let stem = file_name.split('.').next().unwrap_or_default();
+    stem.starts_with("test_")
+        || stem.ends_with("_test")
+        || stem.ends_with("_tests")
+        || stem.ends_with("_spec")
+        || file_name.contains(".test.")
+        || file_name.contains(".spec.")
 }
 
 fn env_confidence(
